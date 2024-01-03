@@ -50,7 +50,7 @@ async def test_log_source():
     pipe = array_source(range(4))
     pipe = log_step(pipe, "test")
     ret = await array_sink(pipe)
-    assert ret == [0, 1, 2, 3, "BAD"]
+    assert ret == [0, 1, 2, 3]
 
 
 @pytest.mark.asyncio
