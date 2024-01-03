@@ -1,0 +1,3 @@
+{"event":"start","sequenceNumber":1,"data":{"id":1,"name":"test"}}
+{"event":"media","sequenceNumber":2}
+{"event":"media","sequenceNumber":3}
