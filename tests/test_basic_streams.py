@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 from asyncio import Future
 from os.path import join, dirname
 from typing import AsyncIterator
