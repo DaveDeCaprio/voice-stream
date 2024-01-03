@@ -35,6 +35,6 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root --all-extras
       - name: Install library
-        run: poetry install --no-interaction
+        run: poetry install --no-interaction --all-extras
       - name: Test with pytest
-        run: poetry run pytest --cov=<project-dir> --cov-report=xml
+        run: poetry run pytest
