@@ -6,6 +6,8 @@ authors = ["Dave DeCaprio <daved@alum.mit.edu>"]
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/DaveDeCaprio/voice-stream"
+keywords = ["voicebot", "genai", "twilio", "llm"]
+classifiers = ["Development Status :: 2 - Pre-Alpha"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
