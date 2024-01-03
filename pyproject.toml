@@ -1,37 +1,50 @@
 [tool.poetry]
-name = "voicestream"
+name = "voice-stream"
 version = "0.1.0"
-description = ""
+description = "A streaming library for creating voice bots using LLMs.  Connects LLMs to speech recognition and speech synthesis APIs."
 authors = ["Dave DeCaprio <daved@alum.mit.edu>"]
 readme = "README.md"
+license = "MIT"
+repository = "https://github.com/DaveDeCaprio/voice-stream"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-langchain = "^0.0.353"
-pydantic = "^2.5.3"
-
-
-
+langchain = ">=0.0.353"
+pydantic = ">=2.5.3"
+google-cloud-speech = { version = ">=2.23.0", optional = true }
+google-cloud-texttospeech = { version = ">=2.15.0", optional = true }
+langchain-google-genai = { version = ">=0.0.5", optional = true }
+twilio = { version = ">=8.11.0", optional = true }
+tiktoken = { version = ">=0.5.2", optional = true }
+openai = { version = ">=1.6.1", optional = true }
 
 [tool.poetry.group.test.dependencies]
-pytest = "^7.4.4"
-pytest-asyncio = "^0.23.3"
+pytest = ">=7.4.4"
+pytest-asyncio = ">=0.23.3"
 
 
-[tool.poetry.group.google.dependencies]
-google-cloud-speech = "^2.23.0"
-google-cloud-texttospeech = "^2.15.0"
-langchain-google-genai = "^0.0.5"
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^3.6.0"
+
+[tool.poetry.extras]
+openai = ["openai", "tiktoken"]
+twilio = ["twilio"]
+google = ["google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai"]
 
 
-[tool.poetry.group.twilio.dependencies]
-twilio = "^8.11.0"
+[[tool.poetry.source]]
+name = "pypi-test"
+url = "https://test.pypi.org/simple/"
+priority = "explicit"
 
 
-[tool.poetry.group.openai.dependencies]
-tiktoken = "^0.5.2"
-openai = "^1.6.1"
+[[tool.poetry.source]]
+name = "PyPI"
+priority = "default"
 
+[tool.pytest.ini_options]
+log_level="DEBUG"
+log_cli=true
 
 [build-system]
 requires = ["poetry-core"]
