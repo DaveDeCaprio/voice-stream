@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "voicestream"
+version = "0.1.0"
+description = ""
+authors = ["Dave DeCaprio <daved@alum.mit.edu>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+langchain = "^0.0.353"
+pydantic = "^2.5.3"
+
+
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4.4"
+pytest-asyncio = "^0.23.3"
+
+
+[tool.poetry.group.google.dependencies]
+google-cloud-speech = "^2.23.0"
+google-cloud-texttospeech = "^2.15.0"
+langchain-google-genai = "^0.0.5"
+
+
+[tool.poetry.group.twilio.dependencies]
+twilio = "^8.11.0"
+
+
+[tool.poetry.group.openai.dependencies]
+tiktoken = "^0.5.2"
+openai = "^1.6.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
