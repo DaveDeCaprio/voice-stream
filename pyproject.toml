@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "voice-stream"
-version = "0.2.3"
+version = "0.0.0"
 description = "A streaming library for creating voice bots using LLMs.  Connects LLMs to speech recognition and speech synthesis APIs."
 authors = ["Dave DeCaprio <daved@alum.mit.edu>"]
 readme = "README.md"

@@ -38,6 +38,8 @@ jobs:
       - name: Install library
         run: poetry install --no-interaction --all-extras
       # Build library.
+      - name: Set version from Git tag
+        run: poetry version $(git describe --tags --abbrev=0)
       - name: Poetry Build
         run: poetry build
       # Generate hashes used for provenance.
