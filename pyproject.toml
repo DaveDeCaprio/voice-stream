@@ -40,6 +40,8 @@ pytest-asyncio = ">=0.23.3"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
+sphinx = "^7.2.6"
+myst-parser = "^2.0.0"
 
 [tool.poetry.extras]
 openai = ["openai", "tiktoken"]

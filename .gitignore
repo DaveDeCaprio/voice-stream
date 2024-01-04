@@ -12,6 +12,9 @@ dist/
 .idea/
 *.iml
 
+# Doc build
+/docs/_build/
+
 # Defaults
 
 # Node artifact files
