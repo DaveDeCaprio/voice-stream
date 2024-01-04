@@ -7,7 +7,18 @@ readme = "README.md"
 license = "MIT"
 repository = "https://github.com/DaveDeCaprio/voice-stream"
 keywords = ["voicebot", "genai", "twilio", "llm"]
-classifiers = ["Development Status :: 2 - Pre-Alpha"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Topic :: Communications :: Conferencing",
+    "Topic :: Communications :: Telephony",
+    "Topic :: Multimedia :: Sound/Audio :: Capture/Recording",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"
