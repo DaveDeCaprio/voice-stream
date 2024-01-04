@@ -6,6 +6,7 @@ authors = ["Dave DeCaprio <daved@alum.mit.edu>"]
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/DaveDeCaprio/voice-stream"
+#documentation = "https://quart.palletsprojects.com"
 keywords = ["voicebot", "genai", "twilio", "llm"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -37,11 +38,12 @@ quart = { version = ">=0.19.4", optional = true }
 pytest = ">=7.4.4"
 pytest-asyncio = ">=0.23.3"
 
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.2.6"
+myst-parser = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
-sphinx = "^7.2.6"
-myst-parser = "^2.0.0"
 
 [tool.poetry.extras]
 openai = ["openai", "tiktoken"]
