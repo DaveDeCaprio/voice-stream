@@ -38,7 +38,7 @@ jobs:
       - name: Install library
         run: poetry install --no-interaction --all-extras
       # Build library.
-      - name: Install library
+      - name: Poetry Build
         run: poetry build
       # Generate hashes used for provenance.
       - name: generate hash
@@ -85,11 +85,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v3
       # Try uploading to Test PyPI first, in case something fails.
-#      - name: Publish to Test PyPI
-#      uses: pypa/gh-action-pypi-publish@release/v1
-#        with:
-#          repository-url: https://test.pypi.org/legacy/
-#          packages-dir: artifact/
+      - name: Publish to Test PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: artifact/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
