@@ -75,21 +75,22 @@ jobs:
           *.intoto.jsonl/* artifact/*
         env:
           GH_TOKEN: ${{ github.token }}
+
   publish-pypi:
     needs: ['provenance']
-    # Wait for approval before attempting to upload to PyPI. This allows reviewing the
-    # files in the draft release.
-    environment: 'release'
     runs-on: ubuntu-latest
+    environment: 'release'
     permissions:
       id-token: write
     steps:
       - uses: actions/download-artifact@v3
       # Try uploading to Test PyPI first, in case something fails.
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          packages-dir: artifact/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+#      - name: Publish to Test PyPI
+#      uses: pypa/gh-action-pypi-publish@release/v1
+#        with:
+#          repository-url: https://test.pypi.org/legacy/
+#          packages-dir: artifact/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: artifact/
