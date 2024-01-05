@@ -69,7 +69,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
       - name: create release
         run: >
           gh release create --draft --repo ${{ github.repository }}
@@ -85,7 +85,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
       # Try uploading to Test PyPI first, in case something fails.
       - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
