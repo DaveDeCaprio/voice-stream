@@ -665,13 +665,13 @@ protobuf = ">=3.19.5,<3.20.0 || >3.20.0,<3.20.1 || >3.20.1,<4.21.0 || >4.21.0,<4
 
 [[package]]
 name = "google-cloud-texttospeech"
-version = "2.15.0"
+version = "2.15.1"
 description = "Google Cloud Texttospeech API client library"
 optional = true
 python-versions = ">=3.7"
 files = [
-    {file = "google-cloud-texttospeech-2.15.0.tar.gz", hash = "sha256:77863ed54f78fcd2e194ca113c9cc5e7e40b87306ccec1ba307e46dcf81f0737"},
-    {file = "google_cloud_texttospeech-2.15.0-py2.py3-none-any.whl", hash = "sha256:761d69a72bc7ad4a83010b2d550c8e4d4afa7b3f4945225ed95bb069e1c39103"},
+    {file = "google-cloud-texttospeech-2.15.1.tar.gz", hash = "sha256:47845e3ad9cefdabaf358947cb196dddea2faa4cdfcaf864a011db821a4deafb"},
+    {file = "google_cloud_texttospeech-2.15.1-py2.py3-none-any.whl", hash = "sha256:9af25742c2fc57e7793dfc831ab40d5f169f6843ba553ca559ab1ec73536076e"},
 ]
 
 [package.dependencies]
