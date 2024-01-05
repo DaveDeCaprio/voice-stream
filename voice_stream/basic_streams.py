@@ -53,7 +53,25 @@ def is_async_iterator(obj):
 
 
 def map_future(f: Future[T], func: Callable[[T], Output]) -> Future[Output]:
-    """Returns a future that will be resolved with the result of applying func to the result of f"""
+    """Returns a future that will be resolved with the result of applying func to the result of f.
+
+    Words are made lowercase and punctuation is removed
+    before counting.
+
+    Parameters
+    ----------
+    input_file : str
+        Path to text file.
+
+    Returns
+    -------
+    collections.Counter
+        dict-like object where keys are words and values are counts.
+
+    Examples
+    --------
+    >>> count_words("text.txt")
+    """
     loop = asyncio.get_running_loop()
     ret = loop.create_future()
 

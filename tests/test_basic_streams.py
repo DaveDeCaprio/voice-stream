@@ -6,7 +6,7 @@ from typing import AsyncIterator
 
 import pytest
 
-from voice_stream.basic_streams import (
+from voice_stream import (
     array_source,
     partition_step,
     array_sink,
