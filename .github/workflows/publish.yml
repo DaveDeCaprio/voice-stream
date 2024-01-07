@@ -18,7 +18,7 @@ jobs:
       # Build library.
       - name: Get version
         id: version
-        run: echo "version=$(git describe --tags --abbrev=0 | cut -c 2-)"- >> $GITHUB_OUTPUT
+        run: echo "version=$(git describe --tags --abbrev=0 | cut -c 2-)" >> $GITHUB_OUTPUT
       - name: Set version from Git tag
         run: poetry version ${{ steps.version.outputs.version }}
       - name: Build Changelog
