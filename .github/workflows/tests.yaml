@@ -5,10 +5,11 @@ on:
   pull_request:
 
 jobs:
+  setup:
+    uses: ./.github/workflows/_setup.yml
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: ./.github/workflows/_setup.yml
       - name: Test with pytest
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

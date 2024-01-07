@@ -1,10 +1,9 @@
 name: libs/Setup
 
 # This sets up the project with all dependencies as specified in the poetry.lock file.
-# It does not install the project package itself.
 
 on:
-  workflow_call:
+  workflow_call: # Allows triggering from another workflow
 
 jobs:
   setup:
