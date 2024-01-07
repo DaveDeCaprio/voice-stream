@@ -5,11 +5,10 @@ on:
   pull_request:
 
 jobs:
-  setup:
-    uses: actions/setup@1
   test:
     runs-on: ubuntu-latest
     steps:
+      - uses: ./.github/actions/poetry_setup
       - name: Test with pytest
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
