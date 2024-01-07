@@ -1,14 +1,8 @@
-name: libs/Setup
-
-# This sets up the project with all dependencies as specified in the poetry.lock file.
-
-on:
-  workflow_call: # Allows triggering from another workflow
-
-jobs:
-  setup:
-    runs-on: ubuntu-latest
-    steps:
+name: 'Poetry Setup'
+description: 'Sets up the project with all dependencies as specified in the poetry.lock file.'
+runs:
+  using: "composite"
+  steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
       with:
