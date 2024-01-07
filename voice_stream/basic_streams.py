@@ -19,7 +19,7 @@ from typing import (
 
 import aiofiles
 
-from voice_stream.queue_with_exception import QueueWithException
+from voice_stream._queue_with_exception import QueueWithException
 
 T = TypeVar("T")
 Output = TypeVar("Output")
@@ -319,7 +319,7 @@ def async_init_step(
         return outputs
 
 
-def materialize_value_step(
+def extract_value_step(
     async_iter: AsyncIterator[T],
     value: Callable[[T], Any],
     condition: Optional[Callable[[T], bool]] = None,

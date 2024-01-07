@@ -15,12 +15,8 @@ async def quart_websocket_source() -> AsyncIterator[str]:
         try:
             message = await websocket.receive()
         except CancelledError:
-            logger.info("websocket.receive is cancelled.")
+            logger.debug("websocket.receive is cancelled.")
             return
-        # if message is None:
-        #     logger.info("Closing websocket")
-        #     await websocket.close(1000)
-        #     break
         yield message
 
 

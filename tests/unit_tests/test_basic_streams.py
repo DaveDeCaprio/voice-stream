@@ -1,11 +1,11 @@
 import asyncio
 import logging
 from asyncio import Future
-from os.path import join, dirname
 from typing import AsyncIterator
 
 import pytest
 
+from tests.helpers import example_file, assert_files_equal
 from voice_stream import (
     array_source,
     partition_step,
@@ -14,7 +14,7 @@ from voice_stream import (
     text_file_sink,
     fork_step,
     log_step,
-    materialize_value_step,
+    extract_value_step,
     concat_step,
     queue_source,
     queue_sink,
@@ -29,10 +29,6 @@ from voice_stream import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def example_file(filename: str) -> str:
-    return join(dirname(__file__), "resources", filename)
 
 
 @pytest.mark.asyncio
@@ -93,9 +89,7 @@ async def test_map_async_step():
 @pytest.mark.asyncio
 async def test_materialize_value():
     pipe = array_source(range(4))
-    pipe, f_value = materialize_value_step(
-        pipe, lambda x: x, condition=lambda x: x == 2
-    )
+    pipe, f_value = extract_value_step(pipe, lambda x: x, condition=lambda x: x == 2)
     ret = await array_sink(pipe)
     value = await f_value
     assert ret == [0, 1, 2, 3]
@@ -121,7 +115,7 @@ async def test_async_init_step_with_future():
         return map_step(async_iter, lambda x: x + inc)
 
     pipe = array_source([2, 3, 4])
-    pipe, inc_f = materialize_value_step(pipe, lambda x: x)
+    pipe, inc_f = extract_value_step(pipe, lambda x: x)
     # Increment each element by the value of the first element.
     pipe = async_init_step(pipe, lambda x: increment_by_future(x, inc_f))
     ret = await array_sink(pipe)
@@ -282,10 +276,3 @@ async def test_handle_exception_step_different_type():
     pipe = exception_handler_step(pipe, ValueError, set_raised)
     with pytest.raises(KeyError):
         await array_sink(pipe)
-
-
-def assert_files_equal(expected_path: str, actual_path: str, mode: str = "t") -> None:
-    with open(expected_path, f"r{mode}") as file1, open(
-        actual_path, f"r{mode}"
-    ) as file2:
-        assert file2.read() == file1.read()

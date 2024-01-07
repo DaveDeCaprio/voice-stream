@@ -38,4 +38,13 @@ jobs:
       - name: Install library
         run: poetry install --no-interaction --all-extras
       - name: Test with pytest
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_SPEECH_LOCATION: ${{ secrets.GCP_SPEECH_LOCATION }}
+          GCP_BROWSER_SPEECH_RECOGNIZER: ${{ secrets.GCP_BROWSER_SPEECH_RECOGNIZER }}
+          GCP_TELEPHONE_SPEECH_RECOGNIZER: ${{ secrets.GCP_TELEPHONE_SPEECH_RECOGNIZER }}
         run: poetry run pytest
+
+

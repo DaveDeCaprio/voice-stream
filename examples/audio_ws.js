@@ -1,3 +1,6 @@
+/** This file contains startAudio and stopAudio functions that feed two-way audio over a WebSocket connection to a browser.
+ * It is used by several examples. */
+
 let audioWebsocket;
 let mediaRecorder;
 
