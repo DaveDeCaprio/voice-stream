@@ -12,6 +12,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/poetry_setup
       # Build library.
       - name: Get version
