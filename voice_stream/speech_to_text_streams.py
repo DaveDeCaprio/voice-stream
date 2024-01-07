@@ -63,21 +63,18 @@ def filter_spurious_speech_start_events_step(
                     assert done
                     self.task_for_next_item = None
                     item = await done.pop()
-                    match item:
-                        case SpeechStart():
-                            # logger.debug("Received Speech Start.  Resetting timer")
-                            end_time = datetime.datetime.now() + datetime.timedelta(
-                                seconds=threshold
-                            )
-                            start_event = item
-                        case SpeechEnd():
-                            # logger.debug("Received Speech End, ignoring the start.")
-                            end_time = None
-                            start_event = None
-                        case _:
-                            logger.info(
-                                f"Received unknown speech event, ignoring. {item}"
-                            )
+                    if isinstance(item, SpeechStart):
+                        # logger.debug("Received Speech Start.  Resetting timer")
+                        end_time = datetime.datetime.now() + datetime.timedelta(
+                            seconds=threshold
+                        )
+                        start_event = item
+                    elif isinstance(item, SpeechEnd):
+                        # logger.debug("Received Speech End, ignoring the start.")
+                        end_time = None
+                        start_event = None
+                    else:
+                        logger.info(f"Received unknown speech event, ignoring. {item}")
 
     pipe = WaitingIterator()
     pipe = log_step(pipe, "New Speech Detected", lambda x: x.time_since_start)

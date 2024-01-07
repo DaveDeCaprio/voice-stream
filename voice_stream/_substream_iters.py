@@ -135,40 +135,38 @@ class SwitchableIterator:
         while True:
             self.state_change_event.clear()
             try:
-                match self.state:
-                    case SwitchableIterator.DISCONNECTED:
-                        await self.state_change_event.wait()
-                    case SwitchableIterator.COMPLETED:
-                        raise StopAsyncIteration
-                    case SwitchableIterator.CONNECTED:
-                        next_item_task = asyncio.create_task(
-                            self.async_iter.__anext__()
-                        )
-                        state_change_task = asyncio.create_task(
-                            self.state_change_event.wait()
-                        )
-                        done, pending = await asyncio.wait(
-                            {next_item_task, state_change_task},
-                            return_when=asyncio.FIRST_COMPLETED,
-                        )
-                        for task in pending:
-                            task.cancel()
-                            try:
-                                await task
-                            except asyncio.CancelledError:
-                                pass
-                            except StopAsyncIteration:
-                                pass
-                        if next_item_task in done:
-                            try:
-                                return await next_item_task
-                            except StopAsyncIteration as e:
-                                if self.callback:
-                                    self.callback()
-                                if self.propagate_end_of_iter:
-                                    raise e
-                                # If we aren't propagating the end, disconnect the iterator.
-                                self.disconnect()
+                if self.state == SwitchableIterator.DISCONNECTED:
+                    await self.state_change_event.wait()
+                elif self.state == SwitchableIterator.COMPLETED:
+                    raise StopAsyncIteration
+                else:
+                    assert self.state == SwitchableIterator.CONNECTED
+                    next_item_task = asyncio.create_task(self.async_iter.__anext__())
+                    state_change_task = asyncio.create_task(
+                        self.state_change_event.wait()
+                    )
+                    done, pending = await asyncio.wait(
+                        {next_item_task, state_change_task},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for task in pending:
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
+                        except StopAsyncIteration:
+                            pass
+                    if next_item_task in done:
+                        try:
+                            return await next_item_task
+                        except StopAsyncIteration as e:
+                            if self.callback:
+                                self.callback()
+                            if self.propagate_end_of_iter:
+                                raise e
+                            # If we aren't propagating the end, disconnect the iterator.
+                            self.disconnect()
             finally:
                 self.state_change_event.clear()
 

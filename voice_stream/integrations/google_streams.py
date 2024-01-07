@@ -131,13 +131,12 @@ async def google_text_to_speech_step(
     audio_config = _resolve_google_audio_config(audio_format)
 
     async for item in async_iter:
-        match item:
-            case TTSRequest(text_, voice_):
-                voice = voice_
-                text = text_
-            case _:
-                voice = voice_name
-                text = item
+        if isinstance(item, TTSRequest):
+            voice = item.voice
+            text = item.text
+        else:
+            voice = voice_name
+            text = item
         # noinspection PyTypeChecker
         request = SynthesizeSpeechRequest(
             input=SynthesisInput(text=text),
