@@ -6,7 +6,7 @@ on:
 
 jobs:
   setup:
-    uses: actions/setup
+    uses: actions/setup@1
   test:
     runs-on: ubuntu-latest
     steps:
