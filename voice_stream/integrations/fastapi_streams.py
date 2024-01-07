@@ -1,9 +1,10 @@
 import json
 import logging
 from asyncio import CancelledError
-from typing import AsyncIterator
+from typing import AsyncIterator, Union
 from fastapi import WebSocket
 from hypercorn.utils import UnexpectedMessageError
+from starlette.websockets import WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ async def fastapi_websocket_bytes_source(websocket: WebSocket) -> AsyncIterator[
 
 
 async def fastapi_websocket_text_sink(
-    async_iter: AsyncIterator[str | dict], websocket: WebSocket
+    async_iter: AsyncIterator[Union[str, dict]], websocket: WebSocket
 ) -> None:
     """Takes an async iterator and sends everything to a FastAPI websocket.  Handles strings or dicts."""
     async for message in async_iter:

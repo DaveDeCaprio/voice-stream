@@ -120,7 +120,7 @@ def google_speech_step(
 
 
 async def google_text_to_speech_step(
-    async_iter: AsyncIterator[str | TTSRequest],
+    async_iter: AsyncIterator[Union[str, TTSRequest]],
     text_to_speech_async_client: TextToSpeechAsyncClient,
     voice_name: str = "en-US-Standard-H",
     audio_format: GoogleAudioConfig = AudioFormat.OGG_OPUS,

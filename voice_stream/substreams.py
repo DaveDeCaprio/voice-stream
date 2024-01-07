@@ -8,6 +8,7 @@ from typing import (
     Any,
     Optional,
     List,
+    Union,
 )
 
 from voice_stream._substream_iters import SwitchableIterator
@@ -57,7 +58,7 @@ async def substream_step(async_iter: AsyncIterator[T], substream_func):
 def cancelable_substream_step(
     async_iter: AsyncIterator[T],
     cancel_iter: AsyncIterator[T],
-    substream_func: Callable[[AsyncIterator[T]], AsyncIterator[Output] | Tuple],
+    substream_func: Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
     cancel_messages: Optional[List[Any]] = None,
 ):
     """Creates a new substream for each input to async_iter.  If any item comes in on cancel_iter, it immediately stops
@@ -133,7 +134,8 @@ def cancelable_substream_step(
 def interruptable_substream_step(
     async_iterator: AsyncIterator[T],
     substream_func: Callable[
-        [AsyncIterator[T]], Callable[[AsyncIterator[T]], AsyncIterator[Output] | Tuple]
+        [AsyncIterator[T]],
+        Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
     ],
     cancel_messages: Optional[List[Any]] = None,
 ):

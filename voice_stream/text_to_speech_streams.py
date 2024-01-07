@@ -3,7 +3,7 @@ import inspect
 import logging
 import string
 import time
-from typing import AsyncIterator, Tuple, Callable
+from typing import AsyncIterator, Tuple, Callable, Union
 
 from pydantic import BaseModel
 
@@ -78,7 +78,7 @@ def tts_rate_limit_step(
     audio_format: FutureOrObj[AudioFormat],
     buffer_seconds: float = 0.5,
     include_text_output: bool = True,
-) -> AsyncIterator[bytes] | Tuple[AsyncIterator[bytes], AsyncIterator[str]]:
+) -> Union[AsyncIterator[bytes], Tuple[AsyncIterator[bytes], AsyncIterator[str]]]:
     """Breaks a single TextToSpeechOutput into smaller chunks."""
 
     async def tts_output_to_timed_text(tts: AudioWithText) -> TimedText:
