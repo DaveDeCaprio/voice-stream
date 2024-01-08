@@ -1,4 +1,3 @@
-import logging
 import os
 
 from fastapi import FastAPI, WebSocket
@@ -22,10 +21,6 @@ from voice_stream.integrations.google_streams import (
     google_text_to_speech_step,
 )
 from voice_stream.integrations.langchain_streams import langchain_step
-
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)s - %(message)s"
-)
 
 app = FastAPI()
 
@@ -78,9 +73,3 @@ async def audio_websocket_endpoint(websocket: WebSocket):
     )
     pipe = map_step(pipe, lambda x: x.audio)
     await fastapi_websocket_bytes_sink(pipe, websocket)
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, port=8000)

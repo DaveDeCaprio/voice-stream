@@ -69,7 +69,7 @@ We'll create a service account with credentials to access the APIs.
 
 Now if you try to run the quickstart again.
 ```text
-`python quickstart.py
+uvicorn quickstart:app
 ````
 You should get another big exception.  If you scroll up, it should contain a message like this: 
 
@@ -89,6 +89,19 @@ To run the project, you'll need to enable 3 APIs for this project.  Go to the 3 
 * **[Cloud Speech-to-Text API](https://console.cloud.google.com/apis/library/speech.googleapis.com)** - Enables speech recognition
 * **[Cloud Text-to-Speech API](https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview)** - Enables text-to-speech
 
+Once you have done this, you should be able to run the full quickstart.  We can now turn on auto-reloading.
+```text
+uvicorn quickstart:app  --reload
+````
+Press the "Start Voice Chat" button and begin talking.  Google LLM will converse with you as long as you'd like.
 
+## Next Steps
+
+From here, take a look at the rest of the documentation to see what else you can build with VoiceStream.
+
+```{include} ../README.md
+:start-after: <!-- start more-docs -->
+:end-before: <!-- end more-docs -->
+```
 
 

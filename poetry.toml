@@ -1,6 +1,3 @@
 [virtualenvs]
-# See https://github.com/python-poetry/poetry/issues/2404
-# This approach lets us use multiple venvs per project.
-in-project = false
-path = "./.venvs"
+in-project = true
 
