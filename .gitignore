@@ -3,6 +3,7 @@
 
 # Poetry generated
 /.venv
+/.venvs
 dist/
 
 # Cache

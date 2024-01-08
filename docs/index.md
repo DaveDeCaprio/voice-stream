@@ -12,7 +12,7 @@ hide-toc: true
 ```{toctree}
 :hidden:
 
-quickstart
+getting-started/index
 concepts/index
 cookbook/index
 reference/index
