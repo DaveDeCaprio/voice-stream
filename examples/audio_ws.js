@@ -7,7 +7,8 @@ const host = window.location.host; // Includes hostname and port if present
 let audioWebsocket;
 let mediaRecorder;
 
-async function startAudio(path) {
+async function startAudio(audioPlayerId, path) {
+    const audioPlayer = document.getElementById(audioPlayerId);
     const wsUrl = `${protocol}//${host}${path}`;
     audioWebsocket = new WebSocket(wsUrl);
 

@@ -31,8 +31,9 @@ html = """
     <head><title>VoiceStream Quickstart</title></head>
     <body>
         <script src="https://cdn.jsdelivr.net/gh/DaveDeCaprio/voice-stream@main/examples/audio_ws.js"></script>
-        <button onclick="startAudio('/ws/audio')">Start Recording</button>
+        <button onclick="startAudio('audio-player', '/ws/audio')">Start Recording</button>
         <button onclick="stopAudio()">Stop Recording</button>
+        <audio id="audio-player"></audio>
     </body>
 </html>
 """
