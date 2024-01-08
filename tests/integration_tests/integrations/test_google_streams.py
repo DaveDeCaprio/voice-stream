@@ -4,6 +4,7 @@ import os
 import pytest
 from google.api_core.client_options import ClientOptions
 from google.cloud.speech_v2 import SpeechAsyncClient
+from google.cloud.speech_v1 import SpeechAsyncClient as SpeechAsyncClientV1
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
 
 from tests.helpers import assert_files_equal, example_file
@@ -26,6 +27,7 @@ from voice_stream.events import SpeechStart, SpeechEnd
 from voice_stream.integrations.google_streams import (
     google_speech_step,
     google_text_to_speech_step,
+    google_speech_v1_step,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,6 +105,45 @@ async def test_google_speech_with_events():
     assert events == [
         SpeechStart(1.29),
         SpeechEnd(4.5),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_google_speech_browser_v1():
+    speech_async_client = SpeechAsyncClientV1(
+        client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
+    )
+    pipe = binary_file_source(example_file("testing.webm"), chunk_size=65536)
+    pipe = google_speech_v1_step(
+        pipe,
+        speech_async_client,
+        audio_format=AudioFormat.WEBM_OPUS,
+    )
+    ret = await array_sink(pipe)
+    assert ret == ["Start browser-based call."]
+
+
+@pytest.mark.asyncio
+async def test_google_speech_v1_with_events():
+    speech_async_client = SpeechAsyncClientV1(
+        client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
+    )
+    pipe = wav_mulaw_file_source(example_file("testing.wav"))
+    pipe, events = google_speech_v1_step(
+        pipe,
+        speech_async_client,
+        model="telephony",
+        language_code="en-US",
+        audio_format=AudioFormat.WAV_MULAW_8KHZ,
+        include_events=True,
+    )
+    ret = await array_sink(pipe)
+    events = await array_sink(events)
+    logger.info(events)
+    assert ret == ["Testing 1 2 3 testing 1 2 3."]
+    assert events == [
+        SpeechStart(1.38),
+        SpeechEnd(4.46),
     ]
 
 
