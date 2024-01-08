@@ -10,8 +10,8 @@ The [Code of Conduct] applies within all community spaces. If you are not famili
 :hidden:
 
 process
-design
 approach
+design
 ```
 
 [Process](./process)
@@ -20,7 +20,7 @@ approach
 [Approach](./approach)
 : Describes the high level design goals and approach used to develop VoiceStream.
 
-[Internals](./internals)
+[Design](./design)
 : Describes how various parts of VoiceStream are implemented.
 
 [code of conduct]: https://github.com/DaveDeCaprio/voice-stream/blob/main/CODE_OF_CONDUCT.md

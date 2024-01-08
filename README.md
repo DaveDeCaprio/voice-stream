@@ -21,7 +21,7 @@ VoiceStream is a framework for building voice bots using language models.
 
 <!-- start install -->
 
-## Install
+## Quick Install
 
 VoiceStream is distributed on [PyPI].  To install, run:
 
@@ -36,6 +36,10 @@ the dependencies for specific integrations separately.
 
 [pypi]: https://pypi.org/project/voice-stream/
 <!-- end install -->
+
+## 🤔 What is VoiceStream
+
+VoiceStream is distributed on [PyPI].  To install, run:
 
 ## Contributing
 
