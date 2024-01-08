@@ -1,6 +1,9 @@
 # QuickStart
 
-In this quickstart we'll build a fully functional voice bot that runs in a browser and allows you to have a two-way conversation with Google's Gemini model.
+In this quickstart we'll build a fully functional voice bot with a browser interface that allows you to have a two-way 
+conversation with Google's Gemini model.
+
+The server uses FastAPI to serve a web page with start and stop audio buttons.   
 
 ## Installation
 
@@ -29,10 +32,12 @@ Here is the code for our server.  You can also find it in the [examples director
 ```{include} ../examples/quickstart.py
 ```
 
-Save this code as quickstart.py.  We'll walk through it, but for now you can run it with:
+Save this code as quickstart.py.  We'll walk through it, but for now you can run it using uvicorn.  Because the audio is
+sent over websockets, you'll run it using uvicorn rather than a regular python interpreter.  Uvicorn will already be 
+installed if you installed with `pip install voice-stream[quickstart]` above.
 
 ```text
-`python quickstart.py
+uvicorn quickstart:app
 ````
 
 You should see the following exception:
@@ -54,7 +59,9 @@ We'll create a service account with credentials to access the APIs.
 
 1. Navigate to https://console.cloud.google.com/apis/credentials
 2. Click on "+ CREATE CREDENTIALS" and select "Servie Account".
-3. Fill in any value under "Service account name" and press "DONE".
+3. Fill in any value under "Service account name" and press "CREATE AND CONTINUE".
+4. Under "Select a role", select "Basic > Owner" and press "CONTINUE"
+5. Press "DONE".
 4. You should see your new service account listed.  Click on it to go to the details.
 5. Go to the "KEYS" tab, then click on "+ ADD KEY" and select "Create new key". 
 6. Ensure the key type is JSON and click "CREATE".  This will download a JSON file with your credentials.
@@ -79,11 +86,8 @@ This is because even though you have valid credentials, the individual APIs all 
 To run the project, you'll need to enable 3 APIs for this project.  Go to the 3 links below, and click "Enable".  Check the dropdown at the top of the window to make sure you are in the correct project.
 
 * **[Vertex AI](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)** - Enables the Gemini LLM
-* **[](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)** - Enables the Gemini LLM
-
-
-enable the Text-To-Speech API.  You can follow the instructions [here](https://cloud.google.com/text-to-speech/docs/quickstart-client-libraries) to setup your account and get a service account key.   
-To use Google's Gemini model, you'll need to setup a Google Cloud account and enable the Text-To-Speech API.  You can follow the instructions [here](https://cloud.google.com/text-to-speech/docs/quickstart-client-libraries) to setup your account and get a service account key.
+* **[Cloud Speech-to-Text API](https://console.cloud.google.com/apis/library/speech.googleapis.com)** - Enables speech recognition
+* **[Cloud Text-to-Speech API](https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview)** - Enables text-to-speech
 
 
 

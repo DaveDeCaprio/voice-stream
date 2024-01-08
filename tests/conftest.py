@@ -4,7 +4,8 @@ import atexit
 from dotenv import load_dotenv
 
 load_dotenv()
-print("CONFTEST")
+
+os.environ["PYTHONASYNCIODEBUG"] = "1"
 
 # Handle google credentials.  If GOOGLE_APPLICATION_CREDENTIALS_JSON is set, write the contents to a temp file
 # and set GOOGLE_APPLICATION_CREDENTIALS to that path.  If GOOGLE_APPLICATION_CREDENTIALS is already set,

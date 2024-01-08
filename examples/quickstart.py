@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import FastAPI, WebSocket
@@ -6,13 +7,12 @@ from google.api_core.client_options import ClientOptions
 from google.cloud.speech_v1 import SpeechAsyncClient
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
 from langchain_community.chat_models import ChatVertexAI
-from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-from voice_stream import map_step
+from voice_stream import map_step, log_step
 from voice_stream.audio import AudioFormat
+from voice_stream.basic_streams import recover_exception_step
 from voice_stream.integrations.fastapi_streams import (
     fastapi_websocket_bytes_source,
     fastapi_websocket_bytes_sink,
@@ -23,6 +23,10 @@ from voice_stream.integrations.google_streams import (
 )
 from voice_stream.integrations.langchain_streams import langchain_step
 
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)s - %(message)s"
+)
+
 app = FastAPI()
 
 html = """
@@ -30,9 +34,9 @@ html = """
 <html>
     <head><title>VoiceStream Quickstart</title></head>
     <body>
-        <script src="https://cdn.jsdelivr.net/gh/DaveDeCaprio/voice-stream@main/examples/audio_ws.js"></script>
-        <button onclick="startAudio('audio-player', '/ws/audio')">Start Recording</button>
-        <button onclick="stopAudio()">Stop Recording</button>
+        <script src="https://cdn.jsdelivr.net/gh/DaveDeCaprio/voice-stream@main/examples/static/audio_ws.js"></script>
+        <button onclick="startAudio('audio-player', '/ws/audio')">Start Voice Chat</button>
+        <button onclick="stopAudio()">Stop Voice Chat</button>
         <audio id="audio-player"></audio>
     </body>
 </html>
@@ -44,8 +48,8 @@ speech_async_client = SpeechAsyncClient(
 )
 text_to_speech_async_client = TextToSpeechAsyncClient()
 chain = (
-    ChatPromptTemplate.from_messages([HumanMessage(content="{query}")])
-    | ChatVertexAI(model="gemini-pro")
+    ChatPromptTemplate.from_messages([("human", "{query}")])
+    | ChatVertexAI()
     | StrOutputParser()
 )
 
@@ -63,7 +67,12 @@ async def audio_websocket_endpoint(websocket: WebSocket):
         speech_async_client,
         audio_format=AudioFormat.WEBM_OPUS,
     )
+    pipe = log_step(pipe, "Recognized speech")
+    pipe = map_step(pipe, lambda x: {"query": x})
     pipe = langchain_step(pipe, chain)
+    pipe = recover_exception_step(
+        pipe, Exception, lambda x: "Google blocked the response.  Ending conversation."
+    )
     pipe = google_text_to_speech_step(
         pipe, text_to_speech_async_client, audio_format=AudioFormat.MP3
     )

@@ -8,10 +8,7 @@ let audioWebsocket;
 let mediaRecorder;
 
 async function startAudio(audioPlayerId, path) {
-    const audioPlayer = document.getElementById(audioPlayerId);
-    const wsUrl = `${protocol}//${host}${path}`;
-    audioWebsocket = new WebSocket(wsUrl);
-
+    console.log("Starting Bidirectional Audio")
     // Initialize MediaRecorder to record the audio stream
     const stream = await navigator.mediaDevices.getUserMedia({audio: true});
     mediaRecorder = new MediaRecorder(stream);
@@ -23,6 +20,7 @@ async function startAudio(audioPlayerId, path) {
     }
 
     // Initialize MediaSource to play back received audio
+    const audioPlayer = document.getElementById(audioPlayerId);
     const queue = [];
     let sourceBuffer;
 
@@ -41,6 +39,17 @@ async function startAudio(audioPlayerId, path) {
         });
     };
     audioPlayer.src = URL.createObjectURL(mediaSource);
+
+    const wsUrl = `${protocol}//${host}${path}`;
+    audioWebsocket = new WebSocket(wsUrl);
+    audioWebsocket.onerror = (event) => {
+        console.error('Audio WebSocket Error:', event);
+    };
+    audioWebsocket.onopen = function(event) {
+        console.log("Websocket open, starting audio recording")
+        mediaRecorder.start(20); // Send data every 20ms.  This is what Twilio uses.
+    };
+
     audioWebsocket.onmessage = async (event) => {
         const audioData = await event.data.arrayBuffer();
         queue.push(audioData);
@@ -53,15 +62,10 @@ async function startAudio(audioPlayerId, path) {
             mediaSource.endOfStream();
         }
     };
-    audioWebsocket.onerror = (event) => {
-        console.error('Audio WebSocket Error:', event);
-    };
-    audioWebsocket.onopen = function(event) {
-        mediaRecorder.start(20); // Send data every 20ms.  This is what Twilio uses.
-    };
 }
 
 function stopAudio() {
+    console.log("Stopping Bidirectional Audio")
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
     }

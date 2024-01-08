@@ -337,6 +337,19 @@ def extract_value_step(
     return chain(), fut
 
 
+async def recover_exception_step(
+    async_iter: AsyncIterator[T],
+    exception_type: Type[BaseException],
+    exception_handler: Callable[[BaseException], None],
+) -> AsyncIterator[T]:
+    """Wraps an async iterator and logs any exceptions that occur."""
+    try:
+        async for item in async_iter:
+            yield item
+    except exception_type as e:
+        yield exception_handler(e)
+
+
 async def exception_handler_step(
     async_iter: AsyncIterator[T],
     exception_type: Type[BaseException],

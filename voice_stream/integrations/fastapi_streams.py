@@ -13,21 +13,29 @@ async def fastapi_websocket_text_source(websocket: WebSocket) -> AsyncIterator[s
     await websocket.accept()
     try:
         while True:
-            message = await websocket.receive_text()
-            yield message
+            yield await websocket.receive_text()
     except WebSocketDisconnect:
-        logger.debug("websocket.receive is cancelled.")
+        pass
 
 
-async def fastapi_websocket_bytes_source(websocket: WebSocket) -> AsyncIterator[str]:
+async def fastapi_websocket_bytes_source(websocket: WebSocket) -> AsyncIterator[bytes]:
     """Creates an AsyncIterator for binary data coming from the FastAPI websocket."""
     await websocket.accept()
     try:
         while True:
-            message = await websocket.receive_bytes()
-            yield message
+            yield await websocket.receive_bytes()
     except WebSocketDisconnect:
-        logger.debug("websocket.receive is cancelled.")
+        pass
+
+
+async def fastapi_websocket_json_source(websocket: WebSocket) -> AsyncIterator[dict]:
+    """Creates an AsyncIterator for json data coming from the FastAPI websocket."""
+    await websocket.accept()
+    try:
+        while True:
+            yield await websocket.receive_json()
+    except WebSocketDisconnect:
+        pass
 
 
 async def fastapi_websocket_text_sink(
@@ -36,13 +44,17 @@ async def fastapi_websocket_text_sink(
     """Takes an async iterator and sends everything to a FastAPI websocket.  Handles strings or dicts."""
     async for message in async_iter:
         if isinstance(message, dict):
-            message = json.dumps(message)
-        await websocket.send_text(message)
+            await websocket.send_json(message)
+        else:
+            await websocket.send_text(message)
 
 
 async def fastapi_websocket_bytes_sink(
     async_iter: AsyncIterator[bytes], websocket: WebSocket
 ) -> None:
     """Takes an async iterator and sends everything to a FastAPI websocket.  Expects bytes."""
-    async for message in async_iter:
-        await websocket.send_bytes(message)
+    try:
+        async for message in async_iter:
+            await websocket.send_bytes(message)
+    finally:
+        logger.debug("fastapi_websocket_bytes_sink done.")

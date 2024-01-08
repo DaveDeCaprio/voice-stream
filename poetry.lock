@@ -1577,13 +1577,13 @@ images = ["pillow (>=10.1.0,<11.0.0)"]
 
 [[package]]
 name = "langsmith"
-version = "0.0.77"
+version = "0.0.78"
 description = "Client library to connect to the LangSmith LLM Tracing and Evaluation Platform."
 optional = false
 python-versions = ">=3.8.1,<4.0"
 files = [
-    {file = "langsmith-0.0.77-py3-none-any.whl", hash = "sha256:750c0aa9177240c64e131d831e009ed08dd59038f7cabbd0bbcf62ccb7c8dcac"},
-    {file = "langsmith-0.0.77.tar.gz", hash = "sha256:c4c8d3a96ad8671a41064f3ccc673e2e22a4153e823b19f915c9c9b8a4f33a2c"},
+    {file = "langsmith-0.0.78-py3-none-any.whl", hash = "sha256:d7c8300700dde0cea87388177c2552187e87fb4ae789510712e7654db72b5c04"},
+    {file = "langsmith-0.0.78.tar.gz", hash = "sha256:a7d7f1639072aeb12115a931eb6d4c53810a480a1fec90bc8744f232765f3c81"},
 ]
 
 [package.dependencies]
@@ -3423,10 +3423,10 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 google = ["google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai"]
 openai = ["openai", "tiktoken"]
 quart = ["quart"]
-quickstart = ["fastapi", "google-cloud-aiplatform", "google-cloud-speech", "google-cloud-texttospeech", "grpcio", "langchain-google-genai", "uvicorn"]
+quickstart = ["fastapi", "google-cloud-aiplatform", "google-cloud-speech", "google-cloud-texttospeech", "grpcio", "langchain-google-genai", "uvicorn", "websockets"]
 twilio = ["twilio"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "131fe9321ba407ebec14a50225adb2603002bcdbb4a42c4709ff100fc2907a54"
+content-hash = "7d0ea776e0851f8be3ad113db0c3f10565321fc02d8e0f27710b79ee93be0309"
