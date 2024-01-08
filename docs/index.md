@@ -22,7 +22,7 @@ reference/index
 :caption: Development
 :hidden:
 
-contributing
+contributing/index
 stability
 changelog
 license
