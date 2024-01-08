@@ -41,7 +41,7 @@ async def fastapi_websocket_text_sink(
         await websocket.send_text(message)
 
 
-async def fastapi_websocket_binary_sink(
+async def fastapi_websocket_bytes_sink(
     async_iter: AsyncIterator[bytes], websocket: WebSocket
 ) -> None:
     """Takes an async iterator and sends everything to a FastAPI websocket.  Expects bytes."""
