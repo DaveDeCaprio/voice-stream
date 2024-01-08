@@ -11,7 +11,7 @@ from voice_stream import (
     map_step,
 )
 from voice_stream.integrations.google_streams import google_text_to_speech_step
-from voice_stream.integrations.langchain_streams import langchain_stream_step
+from voice_stream.integrations.langchain_streams import langchain_step
 
 
 @pytest.mark.asyncio
@@ -23,7 +23,7 @@ async def test_llm_and_tts(tmp_path):
             "What is 4*8",
         ]
     )
-    pipe = langchain_stream_step(pipe, chain)
+    pipe = langchain_step(pipe, chain)
     pipe = str_buffer_step(pipe)
     pipe = log_step(pipe, "LLM output")
     text_to_speech_async_client = TextToSpeechAsyncClient()

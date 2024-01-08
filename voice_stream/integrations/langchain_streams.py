@@ -47,7 +47,7 @@ class LangchainVoiceFlow:
         def create_output_chain(
             pipe: AsyncIterator[str],
         ) -> (AsyncIterator[bytes], AsyncIterator[str]):
-            pipe = langchain_stream_step(pipe, chain)
+            pipe = langchain_step(pipe, chain)
             if langchain_postprocess:
                 pipe = langchain_postprocess(pipe)
             # pipe = log_step(pipe, "Token")
@@ -63,7 +63,7 @@ class LangchainVoiceFlow:
         )
 
 
-async def langchain_stream_step(
+async def langchain_step(
     async_iter: AsyncIterator[str], chain: Runnable[str, str]
 ) -> AsyncIterator[str]:
     """Runs a chain for each text item sent in, streams back response tokens."""
