@@ -29,6 +29,17 @@ Here is the code for our server.  You can also find it in the [examples director
 ```{include} ../examples/quickstart.py
 ```
 
+Save this code as quickstart.py.  We'll walk through it, but for now you can run it with:
+
+```text
+`python quickstart.py
+````
+
+You should see the following exception:
+```google.auth.exceptions.DefaultCredentialsError: File google_creds.json was not found.```
+
+We'll fix this in the next section.  To use the Google APIs, we'll need a credentials file. 
+
 ## Google Cloud Setup
 
 In this QuickStart, we will use Google Cloud for the Gemini LLM, Speech Recognition, and Text-To-Speech.  
@@ -47,22 +58,28 @@ We'll create a service account with credentials to access the APIs.
 4. You should see your new service account listed.  Click on it to go to the details.
 5. Go to the "KEYS" tab, then click on "+ ADD KEY" and select "Create new key". 
 6. Ensure the key type is JSON and click "CREATE".  This will download a JSON file with your credentials.
-7. Save the JSON file in the same directory as this quickstart.
+7. Save the JSON file as google_creds.json in the same directory as this quickstart.
 
-For the integration to function properly, it is necessary to create a Service Account in your agent’s GCP Project. See [this page](https://cloud.google.com/dialogflow/docs/quick/setup#sa-create) of the documentation for more details.
+Now if you try to run the quickstart again.
+```text
+`python quickstart.py
+````
+You should get another big exception.  If you scroll up, it should contain a message like this: 
 
-Follow the steps below to create a Service Account and set up the integration.
+```
+    status = StatusCode.PERMISSION_DENIED
+    details = "Vertex AI API has not been used in project XXXXXXXXX before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+```
 
-1. Go into the Dialogflow agent’s settings and click on the Project ID link to open its associated GCP Project.
-2. Click on the navigation menu in the GCP console, hover over "IAM & admin", and click "Service accounts".
-3. 
+This is because even though you have valid credentials, the individual APIs all need to be turned on for the project.  Let's fix that.
 
-If deploying this integration outside of GCP, you may authenticate using a key file. Deploying on Cloud Run or Cloud Functions obviates this process.
-1. Click on "+ Create Key" and download the resulting JSON key file.
-2. Save the JSON key file in the desired platform subdirectory.
-3. Set the GOOGLE_APPLICATION_CREDENTIALS environmental variable on the deployment environment to the absolute path of Service Account JSON key file. See [this guide](https://cloud.google.com/dialogflow/docs/quick/setup#auth) for details.
 
-### Enable 
+### Enable APIs 
+
+To run the project, you'll need to enable 3 APIs for this project.  Go to the 3 links below, and click "Enable".  Check the dropdown at the top of the window to make sure you are in the correct project.
+
+* **[Vertex AI](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)** - Enables the Gemini LLM
+* **[](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)** - Enables the Gemini LLM
 
 
 enable the Text-To-Speech API.  You can follow the instructions [here](https://cloud.google.com/text-to-speech/docs/quickstart-client-libraries) to setup your account and get a service account key.   

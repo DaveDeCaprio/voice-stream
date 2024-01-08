@@ -1,9 +1,8 @@
 import json
 import logging
-from asyncio import CancelledError
 from typing import AsyncIterator, Union
+
 from fastapi import WebSocket
-from hypercorn.utils import UnexpectedMessageError
 from starlette.websockets import WebSocketDisconnect
 
 logger = logging.getLogger(__name__)

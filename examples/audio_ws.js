@@ -1,10 +1,14 @@
 /** This file contains startAudio and stopAudio functions that feed two-way audio over a WebSocket connection to a browser.
  * It is used by several examples. */
 
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const host = window.location.host; // Includes hostname and port if present
+
 let audioWebsocket;
 let mediaRecorder;
 
-async function startAudio(wslUrl) {
+async function startAudio(path) {
+    const wsUrl = `${protocol}//${host}${path}`;
     audioWebsocket = new WebSocket(wsUrl);
 
     // Initialize MediaRecorder to record the audio stream

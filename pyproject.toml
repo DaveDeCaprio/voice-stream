@@ -25,6 +25,7 @@ classifiers = [
 python = "^3.9"
 aiofiles = ">=23.2.1"
 langchain = ">=0.0.353"
+mutagen = "^1.47.0"
 pydantic = ">=2.5.3"
 google-cloud-speech = { version = ">=2.23.0", optional = true }
 google-cloud-texttospeech = { version = ">=2.15.0", optional = true }
@@ -36,7 +37,9 @@ quart = { version = ">=0.19.4", optional = true }
 pyaudio = {version = "^0.2.14", optional = true}
 fastapi = {version = "^0.108.0", optional = true}
 vosk = {version = "^0.3.45", optional = true}
-mutagen = "^1.47.0"
+grpcio = {version = "^1.60.0", optional = true}
+google-cloud-aiplatform = {version = "^1.39.0", optional = true}
+uvicorn = {version = "^0.25.0", optional = true}
 
 [tool.poetry.group.test.dependencies]
 pytest = ">=7.4.4"
@@ -56,7 +59,7 @@ openai = ["openai", "tiktoken"]
 twilio = ["twilio"]
 google = ["google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai"]
 quart = ["quart"]
-quickstart = ["fastapi", "google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai"]
+quickstart = ["fastapi", "uvicorn", "google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai", "google-cloud-aiplatform", "grpcio"]
 
 [[tool.poetry.source]]
 name = "pypi-test"

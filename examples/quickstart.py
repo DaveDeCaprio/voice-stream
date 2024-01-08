@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from google.api_core.client_options import ClientOptions
 from google.cloud.speech_v1 import SpeechAsyncClient
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
+from langchain_community.chat_models import ChatVertexAI
 from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -29,9 +30,9 @@ html = """
 <html>
     <head><title>VoiceStream Quickstart</title></head>
     <body>
-        <button onclick="startRecording()">Start Recording</button>
-        <button onclick="stopRecording()">Stop Recording</button>
-        <script src="audio_ws.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/DaveDeCaprio/voice-stream@main/examples/audio_ws.js"></script>
+        <button onclick="startAudio('/ws/audio')">Start Recording</button>
+        <button onclick="stopAudio()">Stop Recording</button>
     </body>
 </html>
 """
@@ -43,7 +44,7 @@ speech_async_client = SpeechAsyncClient(
 text_to_speech_async_client = TextToSpeechAsyncClient()
 chain = (
     ChatPromptTemplate.from_messages([HumanMessage(content="{query}")])
-    | ChatGoogleGenerativeAI(model="gemini-pro")
+    | ChatVertexAI(model="gemini-pro")
     | StrOutputParser()
 )
 
@@ -72,4 +73,4 @@ async def audio_websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, port=8000)
