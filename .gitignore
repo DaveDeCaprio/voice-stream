@@ -1,6 +1,6 @@
 # Secrets
 /.env
-**/google_creds.json
+google_creds.*
 
 # Poetry generated
 /.venv
