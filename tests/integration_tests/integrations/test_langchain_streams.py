@@ -3,12 +3,10 @@ import logging
 import pytest
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
 from langchain_community.chat_models import ChatVertexAI
-from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 from tests.unit_tests.integrations.example_chains import math_physics_routing
-from voice_stream.audio import wav_mulaw_file_sink, AudioFormat
 from voice_stream import (
     array_source,
     str_buffer_step,
@@ -16,6 +14,7 @@ from voice_stream import (
     byte_buffer_step,
     map_step,
 )
+from voice_stream.audio import wav_mulaw_file_sink, AudioFormat
 from voice_stream.basic_streams import single_source, array_sink
 from voice_stream.integrations.google_streams import google_text_to_speech_step
 from voice_stream.integrations.langchain_streams import langchain_step
