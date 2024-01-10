@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import AsyncIterator, Callable, Any, Optional
 
+import asyncstdlib
 from langchain_core.runnables import Runnable
 
 from voice_stream.basic_streams import (
@@ -74,12 +75,13 @@ async def langchain_step(
 ) -> AsyncIterator[Output]:
     """Runs a chain for each text item sent in, streams back response tokens."""
     # Note on cancelling - https://github.com/langchain-ai/langchain/issues/11959
-    async for text in async_iter:
-        input = text[input_key] if input_key else text
-        config = text[config_key] if config_key else None
-        async for token in chain.astream(input, config=config):
-            yield token
-        if on_completion:
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for text in owned_aiter:
+            input = text[input_key] if input_key else text
+            config = text[config_key] if config_key else None
+            async for token in chain.astream(input, config=config):
+                yield token
             source = to_source(on_completion)
-            async for item in source:
-                yield item
+            async with asyncstdlib.scoped_iter(source) as owned_source:
+                async for item in owned_source:
+                    yield item

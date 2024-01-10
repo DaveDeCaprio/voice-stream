@@ -1,8 +1,11 @@
 import asyncio
 import importlib
 import inspect
+import logging
 from asyncio import Future
 from typing import TypeVar, Tuple, List, Optional, Union, Callable, AsyncIterator
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 Input = TypeVar("Input", contravariant=True)
@@ -16,14 +19,16 @@ def to_source(x: SourceConvertable) -> AsyncIterator[T]:
     """Creates a source from a callable or value."""
     if callable(x):
         return x()
-    elif x:
-        from voice_stream.basic_streams import single_source
-
-        return single_source(x)
-    else:
+    elif x is None:
+        logger.info("Empty source")
         from voice_stream.basic_streams import empty_source
 
         return empty_source()
+    else:
+        logger.info("Single source")
+        from voice_stream.basic_streams import single_source
+
+        return single_source(x)
 
 
 def to_tuple(obj) -> Tuple:

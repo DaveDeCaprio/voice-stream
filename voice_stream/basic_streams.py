@@ -17,6 +17,7 @@ from typing import (
 )
 
 import aiofiles
+import asyncstdlib
 
 from voice_stream._queue_with_exception import QueueWithException
 from voice_stream.types import to_tuple, resolve_obj_or_future, T, Output, FutureOrObj
@@ -41,8 +42,9 @@ def none_source() -> AsyncIterator[T]:
 
 async def empty_sink(async_iter: AsyncIterator[T]) -> None:
     """An async iterator created from an array.  Returns the array."""
-    async for _ in async_iter:
-        pass
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for _ in owned_aiter:
+            pass
     # logger.info("Empty sink finished")
 
 
@@ -62,9 +64,10 @@ async def array_source(array: list[T]) -> AsyncIterator[T]:
 async def array_sink(async_iter: AsyncIterator[T]) -> list[T]:
     """An async iterator created from an array.  Returns the array."""
     array = []
-    async for item in async_iter:
-        array.append(item)
-    return array
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            array.append(item)
+        return array
 
 
 class QueueAsyncIterator:
@@ -112,13 +115,14 @@ async def queue_sink(
     """Writes each element of the async_iter to a queue"""
     resolved_queue = None
     try:
-        async for message in async_iter:
-            if resolved_queue is None:
-                if queue:
-                    resolved_queue = await resolve_obj_or_future(queue)
-                else:
-                    resolved_queue = asyncio.Queue()
-            await resolved_queue.put(message)
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for message in owned_aiter:
+                if resolved_queue is None:
+                    if queue:
+                        resolved_queue = await resolve_obj_or_future(queue)
+                    else:
+                        resolved_queue = asyncio.Queue()
+                await resolved_queue.put(message)
     except Exception as e:
         if resolved_queue and hasattr(resolved_queue, "set_exception"):
             await resolved_queue.set_exception(e)
@@ -171,12 +175,13 @@ async def _file_sink(
 ) -> None:
     f = None
     try:
-        async for block in async_iter:
-            # We wait to resolve the filename until we have a message to write
-            if f is None:
-                filename = await resolve_obj_or_future(filename)
-                f = await aiofiles.open(filename, mode)
-            await f.write(prep_func(block))
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for block in owned_aiter:
+                # We wait to resolve the filename until we have a message to write
+                if f is None:
+                    filename = await resolve_obj_or_future(filename)
+                    f = await aiofiles.open(filename, mode)
+                await f.write(prep_func(block))
     finally:
         if f is not None:
             await f.close()
@@ -189,18 +194,21 @@ def map_str_to_json_step(async_iter: AsyncIterator[str]) -> AsyncIterator[dict]:
 
 async def flatten_step(async_iter: AsyncIterator[Iterable[T]]) -> AsyncIterator[T]:
     """Takes an async iterator where each item is iterable and iterates over it."""
-    async for item in async_iter:
-        for subitem in item:
-            yield subitem
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            for subitem in item:
+                yield subitem
 
 
 async def async_flatten_step(
     async_iter: AsyncIterator[AsyncIterator[T]],
 ) -> AsyncIterator[T]:
     """Takes an async iterator where each item is an AsyncIterator and iterates over it."""
-    async for item in async_iter:
-        async for subitem in item:
-            yield subitem
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            async with asyncstdlib.scoped_iter(item) as owned_subiter:
+                async for subitem in owned_subiter:
+                    yield subitem
 
 
 def async_init_step(
@@ -271,10 +279,11 @@ def extract_value_step(
     fut = loop.create_future()
 
     async def chain():
-        async for item in async_iter:
-            if not fut.done() and (condition is None or condition(item)):
-                fut.set_result(value(item))
-            yield item
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for item in owned_aiter:
+                if not fut.done() and (condition is None or condition(item)):
+                    fut.set_result(value(item))
+                yield item
 
     return chain(), fut
 
@@ -286,8 +295,9 @@ async def recover_exception_step(
 ) -> AsyncIterator[T]:
     """Wraps an async iterator and logs any exceptions that occur."""
     try:
-        async for item in async_iter:
-            yield item
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for item in owned_aiter:
+                yield item
     except exception_type as e:
         yield exception_handler(e)
 
@@ -299,8 +309,9 @@ async def exception_handler_step(
 ) -> AsyncIterator[T]:
     """Wraps an async iterator and logs any exceptions that occur."""
     try:
-        async for item in async_iter:
-            yield item
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for item in owned_aiter:
+                yield item
     except exception_type as e:
         exception_handler(e)
 
@@ -309,27 +320,30 @@ async def log_step(
     async_iter: AsyncIterator[T], name: str, formatter: Callable[[T], Any] = lambda x: x
 ) -> AsyncIterator[T]:
     """Logs out the messages coming through a source."""
-    async for item in async_iter:
-        formatted = formatter(item)
-        logger.info(f"{name}: {formatted}")
-        yield item
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            formatted = formatter(item)
+            logger.info(f"{name}: {formatted}")
+            yield item
 
 
 async def count_step(async_iter: AsyncIterator[T], name: str) -> AsyncIterator[T]:
     """Counts the number of messages streamed through a pipe."""
     counter = 0
-    async for item in async_iter:
-        counter += 1
-        yield item
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            counter += 1
+            yield item
     logger.info(f"{name} count: {counter}")
 
 
 async def filter_step(
     async_iter: AsyncIterator[T], condition: Callable[[T], bool]
 ) -> AsyncIterator[T]:
-    async for item in async_iter:
-        if condition(item):
-            yield item
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            if condition(item):
+                yield item
 
 
 async def map_step(
@@ -341,31 +355,34 @@ async def map_step(
     Optional 'ignore_none' clause indicates that a value of None should be dropped.  Allows filtering and mapping in one step.
     """
     is_async = inspect.iscoroutinefunction(func)
-    async for item in async_iter:
-        v = func(item)
-        if is_async:
-            v = await v
-        if (not ignore_none) or v:
-            yield v
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            v = func(item)
+            if is_async:
+                v = await v
+            if (not ignore_none) or v:
+                yield v
 
 
 async def concat_step(*async_iters: List[AsyncIterator[T]]) -> AsyncIterator[T]:
     """Concatenates multiple iterators into a single iterator."""
     for async_iter in async_iters:
-        async for item in async_iter:
-            yield item
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for item in owned_aiter:
+                yield item
 
 
 async def chunk_bytes_step(
     async_iter: AsyncIterator[bytes], chunk_size: FutureOrObj[int]
 ) -> AsyncIterator[bytes]:
     """Breaks byte buffers into chunks with a maximum size."""
-    async for item in async_iter:
-        resolved_chunk_size = await resolve_obj_or_future(chunk_size)
-        for i in range(0, len(item), resolved_chunk_size):
-            data = item[i : i + resolved_chunk_size]
-            # logger.debug(f"Chunked {len(data)} bytes")
-            yield data
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            resolved_chunk_size = await resolve_obj_or_future(chunk_size)
+            for i in range(0, len(item), resolved_chunk_size):
+                data = item[i : i + resolved_chunk_size]
+                # logger.debug(f"Chunked {len(data)} bytes")
+                yield data
 
 
 async def min_size_bytes_step(
@@ -373,15 +390,16 @@ async def min_size_bytes_step(
 ) -> AsyncIterator[bytes]:
     """Ensures byte streams have a least a minimum size."""
     buffer = b""
-    async for item in async_iter:
-        combined = buffer + item
-        if len(combined) >= await resolve_obj_or_future(min_size):
-            yield combined
-            buffer = b""
-        else:
-            buffer = combined
-    if len(buffer) > 0:
-        yield buffer
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            combined = buffer + item
+            if len(combined) >= await resolve_obj_or_future(min_size):
+                yield combined
+                buffer = b""
+            else:
+                buffer = combined
+        if len(buffer) > 0:
+            yield buffer
 
 
 async def merge_step(*async_iters: list[AsyncIterator[T]]) -> AsyncIterator[T]:
@@ -416,11 +434,12 @@ async def merge_as_dict_step(
     secondary_iters = {k: dict_iters[k] for k in key_iter}
     values = {}
 
-    async def consume_iter(key, iter):
+    async def consume_iter(key, it):
         # logger.debug(f"Starting consumer for {key}")
-        async for item in iter:
-            # logger.debug(f"Consumed {item} for {key}")
-            values[key] = item
+        async with asyncstdlib.scoped_iter(it) as owned_it:
+            async for item in owned_it:
+                # logger.debug(f"Consumed {item} for {key}")
+                values[key] = item
 
     tasks = [
         asyncio.create_task(consume_iter(k, iter))
@@ -443,13 +462,14 @@ def partition_step(
 
     async def distribute():
         try:
-            async for item in async_iter:
-                # logger.debug(f"Distributing {item}")
-                if condition(item):
-                    await true_queue.put(item)
-                else:
-                    await false_queue.put(item)
-                # logger.debug(f"Queue sizes: {true_queue.qsize()} {false_queue.qsize()}")
+            async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+                async for item in owned_aiter:
+                    # logger.debug(f"Distributing {item}")
+                    if condition(item):
+                        await true_queue.put(item)
+                    else:
+                        await false_queue.put(item)
+                    # logger.debug(f"Queue sizes: {true_queue.qsize()} {false_queue.qsize()}")
         except Exception as e:
             # logger.debug(f"Exception while queueing")
             true_queue.set_exception(e)
@@ -480,9 +500,10 @@ def fork_step(
         right_iterator = _make_queue_iterator(right_queue)
 
         async def consume_and_queue() -> AsyncIterator[T]:
-            async for item in async_iter:
-                await right_queue.put(item)
-                yield item
+            async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+                async for item in owned_aiter:
+                    await right_queue.put(item)
+                    yield item
             await right_queue.put(None)
 
         left_iterator = consume_and_queue()
@@ -494,9 +515,10 @@ def fork_step(
 
         async def distribute():
             try:
-                async for item in async_iter:
-                    await left_queue.put(item)
-                    await right_queue.put(item)
+                async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+                    async for item in owned_aiter:
+                        await left_queue.put(item)
+                        await right_queue.put(item)
             except Exception as e:
                 left_queue.set_exception(e)
                 right_queue.set_exception(e)

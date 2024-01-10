@@ -1,11 +1,19 @@
+import json
+import logging.config
 import os
 import atexit
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 os.environ["PYTHONASYNCIODEBUG"] = "1"
+
+# Set up logging
+with open(Path(__file__).parent / "test_logging_config.json", "r") as f:
+    config = json.load(f)
+    logging.config.dictConfig(config)
 
 # Handle google credentials.  If GOOGLE_APPLICATION_CREDENTIALS_JSON is set, write the contents to a temp file
 # and set GOOGLE_APPLICATION_CREDENTIALS to that path.  If GOOGLE_APPLICATION_CREDENTIALS is already set,

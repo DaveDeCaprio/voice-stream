@@ -54,6 +54,6 @@ async def test_gemini():
     pipe = single_source({"query": "What's 2+2?"})
     pipe = langchain_step(pipe, chain, on_completion="")
     ret = await array_sink(pipe)
+    logger.info(f"Gemini response {ret}")
     assert len(ret) == 2
     assert ret[1] == ""
-    logger.info(f"Gemini response {ret[0]}")

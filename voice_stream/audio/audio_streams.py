@@ -3,6 +3,7 @@ import io
 import logging
 from typing import AsyncIterator, Union
 
+import asyncstdlib
 from mutagen.mp3 import MP3
 
 from voice_stream.audio.async_wav_file import (
@@ -41,16 +42,17 @@ async def wav_mulaw_file_sink(
     """Writes a stream of audio bytes to a wav file"""
     f = None
     try:
-        async for message in async_iter:
-            # We wait to resolve the filename until we have a message to write
-            if f is None:
-                filename = await resolve_obj_or_future(filename)
-                f = AsyncMuLawStreamWriter(filename)
-                await f.open()
-            if message is None:
-                break
-            # logger.debug(f"Wrote {len(message)} bytes to {filename}")
-            await f.write(message)
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for message in owned_aiter:
+                # We wait to resolve the filename until we have a message to write
+                if f is None:
+                    filename = await resolve_obj_or_future(filename)
+                    f = AsyncMuLawStreamWriter(filename)
+                    await f.open()
+                if message is None:
+                    break
+                # logger.debug(f"Wrote {len(message)} bytes to {filename}")
+                await f.write(message)
     finally:
         if f is not None:
             await f.close()
@@ -61,15 +63,16 @@ async def mp3_chunk_step(
     async_iter: AsyncIterator[bytes], chunk_size: FutureOrObj[int]
 ) -> AsyncIterator[bytes]:
     """Takes in MP3 data and splits it on MP3 frame boundaries, making chunks as large as possible, but not larger than max_size, unless an individual frame is larger than max_size."""
-    async for data in async_iter:
-        resolved_chunk_size = await resolve_obj_or_future(chunk_size)
-        boundaries = find_frame_boundaries(data)
-        splits = calculate_split_points(boundaries, len(data), resolved_chunk_size)
-        split_start = 0
-        for split_end in splits:
-            yield data[split_start:split_end]
-            split_start = split_end
-        assert split_end == len(data)
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for data in owned_aiter:
+            resolved_chunk_size = await resolve_obj_or_future(chunk_size)
+            boundaries = find_frame_boundaries(data)
+            splits = calculate_split_points(boundaries, len(data), resolved_chunk_size)
+            split_start = 0
+            for split_end in splits:
+                yield data[split_start:split_end]
+                split_start = split_end
+            assert split_end == len(data)
 
 
 async def ogg_page_separator_step(
@@ -78,18 +81,19 @@ async def ogg_page_separator_step(
     """Takes in a stream of bytes from an OGG media file and outputs bytes ensuring that each output is a complete page.
     Checks if the last page in each chunk sent is a full page, if so, it sends it."""
     buffer = b""
-    async for data in async_iter:
-        concatenated = buffer + data
-        if concatenated[:4] != b"OggS":
-            raise AudioFormatError(
-                f"Bytes didn't start with a proper OggS head.  Expected 'OggS, got {concatenated[:4]}"
-            )
-        position = concatenated.rfind(b"OggS")
-        if OggPage.is_full_page(concatenated, position):
-            position = len(concatenated)
-        buffer = concatenated[position:]
-        if position > 0:
-            yield concatenated[:position]
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for data in owned_aiter:
+            concatenated = buffer + data
+            if concatenated[:4] != b"OggS":
+                raise AudioFormatError(
+                    f"Bytes didn't start with a proper OggS head.  Expected 'OggS, got {concatenated[:4]}"
+                )
+            position = concatenated.rfind(b"OggS")
+            if OggPage.is_full_page(concatenated, position):
+                position = len(concatenated)
+            buffer = concatenated[position:]
+            if position > 0:
+                yield concatenated[:position]
     if len(buffer) > 0:
         yield buffer
 
@@ -105,52 +109,54 @@ async def ogg_concatenator_step(
     granule_offset = 0
     header = None
 
-    async for data in async_iter:
-        # Iterate through each ogg page and update.
-        position = 0
-        pages = []
-        while position < len(data):
-            page = OggPage.from_data(data, position)
-            page_header_type = page.header_type
-            position += page.page_length
-            if page.page_sequence_number == 0:
-                if not OpusIdPacket.is_opus_encoded(
-                    data, page.offset + page.header_length
-                ):
-                    raise AudioFormatError(
-                        "OGG file is not OPUS encoded.  Only Opus is currently supported."
-                    )
-                new_header = OpusIdPacket.from_data(
-                    data, page.offset + page.header_length
-                )
-                if header is not None:
-                    if (
-                        header.output_channel_count != new_header.output_channel_count
-                        or header.input_sample_rate != new_header.input_sample_rate
-                        or header.output_gain != new_header.output_gain
-                        or header.channel_mapping_family
-                        != new_header.channel_mapping_family
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for data in owned_aiter:
+            # Iterate through each ogg page and update.
+            position = 0
+            pages = []
+            while position < len(data):
+                page = OggPage.from_data(data, position)
+                page_header_type = page.header_type
+                position += page.page_length
+                if page.page_sequence_number == 0:
+                    if not OpusIdPacket.is_opus_encoded(
+                        data, page.offset + page.header_length
                     ):
                         raise AudioFormatError(
-                            "Cant concatenate OGG streams with different headers."
+                            "OGG file is not OPUS encoded.  Only Opus is currently supported."
                         )
-            if sequence_offset and page.page_sequence_number < 2:
-                logger.debug("skipping opus header for later sequence")
-                continue
-            if sequence_offset:
-                page = page.update(
-                    new_header_type=0,
-                    granule_offset=granule_offset,
-                    sequence_offset=sequence_offset,
-                )
-                # page.log()
-            if page_header_type == 4:
-                sequence_offset = sequence_offset + page.page_sequence_number
-                granule_offset = granule_offset + page.granule
-            pages.append(page)
-        logger.debug(f"Adjusted {len(pages)} OGG pages")
-        adjusted = b"".join(_.get_bytes() for _ in pages)
-        yield adjusted
+                    new_header = OpusIdPacket.from_data(
+                        data, page.offset + page.header_length
+                    )
+                    if header is not None:
+                        if (
+                            header.output_channel_count
+                            != new_header.output_channel_count
+                            or header.input_sample_rate != new_header.input_sample_rate
+                            or header.output_gain != new_header.output_gain
+                            or header.channel_mapping_family
+                            != new_header.channel_mapping_family
+                        ):
+                            raise AudioFormatError(
+                                "Cant concatenate OGG streams with different headers."
+                            )
+                if sequence_offset and page.page_sequence_number < 2:
+                    logger.debug("skipping opus header for later sequence")
+                    continue
+                if sequence_offset:
+                    page = page.update(
+                        new_header_type=0,
+                        granule_offset=granule_offset,
+                        sequence_offset=sequence_offset,
+                    )
+                    # page.log()
+                if page_header_type == 4:
+                    sequence_offset = sequence_offset + page.page_sequence_number
+                    granule_offset = granule_offset + page.granule
+                pages.append(page)
+            logger.debug(f"Adjusted {len(pages)} OGG pages")
+            adjusted = b"".join(_.get_bytes() for _ in pages)
+            yield adjusted
 
 
 def remove_wav_header(wav_bytes: bytes) -> bytes:

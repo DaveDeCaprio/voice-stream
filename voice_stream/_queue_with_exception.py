@@ -1,6 +1,8 @@
 import asyncio
 from typing import AsyncIterator
 
+import asyncstdlib
+
 
 class QueueWithException:
     """A queue that propagates exceptions.
@@ -15,8 +17,9 @@ class QueueWithException:
         if not hasattr(async_iter, "__aiter__"):
             raise ValueError(f"Object {async_iter} is not an async iterator")
         try:
-            async for item in async_iter:
-                await self.queue.put(item)
+            async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+                async for item in owned_aiter:
+                    await self.queue.put(item)
         except Exception as e:
             self.exception = e
         # Signal end of iteration

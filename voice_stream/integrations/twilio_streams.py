@@ -6,6 +6,7 @@ import dataclasses
 import logging
 from typing import AsyncIterator, Tuple, Optional
 
+import asyncstdlib
 from quart import websocket, current_app
 
 from voice_stream.basic_streams import (
@@ -33,54 +34,63 @@ def twilio_split_media_step(
     return partition_step(async_iter, lambda x: x["event"] == "media")
 
 
+class TwilioSequenceError(ValueError):
+    pass
+
+
 async def twilio_check_sequence_step(
     async_iter: AsyncIterator[dict],
 ) -> AsyncIterator[dict]:
     """Verifies that no websocket messages were lost in the sequence"""
     expected = 1
-    async for item in async_iter:
-        assert "sequenceNumber" in item, f"Message {item} has no sequence number"
-        if int(item["sequenceNumber"]) != expected:
-            raise ValueError(
-                f"Expected sequence number {expected}, got {item['sequenceNumber']}"
-            )
-        expected += 1
-        yield item
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            if "sequenceNumber" not in item:
+                raise TwilioSequenceError(f"Message {item} has no sequence number")
+            if int(item["sequenceNumber"]) != expected:
+                raise TwilioSequenceError(
+                    f"Expected sequence number {expected}, got {item['sequenceNumber']}"
+                )
+            expected += 1
+            yield item
 
 
 async def twilio_close_on_stop_step(
     async_iter: AsyncIterator[dict],
 ) -> AsyncIterator[dict]:
     """Performs a websocket.close() when a stop message is received."""
-    async for item in async_iter:
-        if item["event"] == "stop":
-            logger.info("Stop message received, closing websocket")
-            await websocket.close(1000)
-        yield item
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            if item["event"] == "stop":
+                logger.info("Stop message received, closing websocket")
+                await websocket.close(1000)
+            yield item
 
 
 async def twilio_media_to_audio_bytes_step(
     async_iter: AsyncIterator[dict],
 ) -> AsyncIterator[bytes]:
     """Converts a twilio media stream into a stream of audio bytes"""
-    async for item in async_iter:
-        assert "media" in item, f"Message {item} has no media"
-        yield base64.b64decode(item["media"]["payload"])
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            assert "media" in item, f"Message {item} has no media"
+            yield base64.b64decode(item["media"]["payload"])
 
 
 async def audio_bytes_to_twilio_media_step(
     async_iter: AsyncIterator[bytes], stream_sid: FutureOrObj[str]
 ) -> AsyncIterator[dict]:
     resolved_stream_sid = None
-    async for packet in async_iter:
-        encoded_data = base64.b64encode(packet).decode("utf-8")
-        if not resolved_stream_sid:
-            resolved_stream_sid = await resolve_obj_or_future(stream_sid)
-        yield {
-            "event": "media",
-            "streamSid": resolved_stream_sid,
-            "media": {"payload": encoded_data},
-        }
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for packet in owned_aiter:
+            encoded_data = base64.b64encode(packet).decode("utf-8")
+            if not resolved_stream_sid:
+                resolved_stream_sid = await resolve_obj_or_future(stream_sid)
+            yield {
+                "event": "media",
+                "streamSid": resolved_stream_sid,
+                "media": {"payload": encoded_data},
+            }
 
 
 async def twilio_format_events_step(

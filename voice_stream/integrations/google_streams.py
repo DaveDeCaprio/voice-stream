@@ -2,6 +2,7 @@ import dataclasses
 import logging
 from typing import AsyncIterator, Union
 
+import asyncstdlib
 from google.api_core.exceptions import Aborted
 from google.cloud.speech_v2 import (
     StreamingRecognizeRequest,
@@ -72,27 +73,28 @@ async def google_text_to_speech_step(
     """
     audio_config = _resolve_google_audio_config(audio_format)
 
-    async for item in async_iter:
-        if isinstance(item, TTSRequest):
-            voice = item.voice
-            text = item.text
-        else:
-            voice = voice_name
-            text = item
-        # noinspection PyTypeChecker
-        request = SynthesizeSpeechRequest(
-            input=SynthesisInput(text=text),
-            voice=VoiceSelectionParams(
-                language_code="en-us",
-                name=voice,
-            ),
-            audio_config=audio_config,
-        )
-        result = await text_to_speech_async_client.synthesize_speech(request)
-        audio = result.audio_content
-        if audio_config.audio_encoding == AudioEncoding.MULAW:
-            audio = remove_wav_header(audio)
-        yield AudioWithText(audio=audio, text=text, audio_format=audio_format)
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            if isinstance(item, TTSRequest):
+                voice = item.voice
+                text = item.text
+            else:
+                voice = voice_name
+                text = item
+            # noinspection PyTypeChecker
+            request = SynthesizeSpeechRequest(
+                input=SynthesisInput(text=text),
+                voice=VoiceSelectionParams(
+                    language_code="en-us",
+                    name=voice,
+                ),
+                audio_config=audio_config,
+            )
+            result = await text_to_speech_async_client.synthesize_speech(request)
+            audio = result.audio_content
+            if audio_config.audio_encoding == AudioEncoding.MULAW:
+                audio = remove_wav_header(audio)
+            yield AudioWithText(audio=audio, text=text, audio_format=audio_format)
 
 
 def google_speech_step(

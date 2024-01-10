@@ -2,6 +2,7 @@ import json
 import logging
 from typing import AsyncIterator, Union
 
+import asyncstdlib
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
@@ -42,11 +43,12 @@ async def fastapi_websocket_text_sink(
     async_iter: AsyncIterator[Union[str, dict]], websocket: WebSocket
 ) -> None:
     """Takes an async iterator and sends everything to a FastAPI websocket.  Handles strings or dicts."""
-    async for message in async_iter:
-        if isinstance(message, dict):
-            await websocket.send_json(message)
-        else:
-            await websocket.send_text(message)
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for message in owned_aiter:
+            if isinstance(message, dict):
+                await websocket.send_json(message)
+            else:
+                await websocket.send_text(message)
 
 
 async def fastapi_websocket_bytes_sink(
@@ -54,7 +56,8 @@ async def fastapi_websocket_bytes_sink(
 ) -> None:
     """Takes an async iterator and sends everything to a FastAPI websocket.  Expects bytes."""
     try:
-        async for message in async_iter:
-            await websocket.send_bytes(message)
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for message in owned_aiter:
+                await websocket.send_bytes(message)
     finally:
         logger.debug("fastapi_websocket_bytes_sink done.")

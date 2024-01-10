@@ -5,6 +5,7 @@ import string
 import time
 from typing import AsyncIterator, Tuple, Callable, Union
 
+import asyncstdlib
 from pydantic import BaseModel
 
 from voice_stream.audio import AudioFormat, AudioFormatError
@@ -64,12 +65,13 @@ async def wait_for_punctuation_step(
     """For TTS, we want to generate as soon as possible, but we don't want to do partial phrases.  Go until we get
     a punctuation mark or an empty token (which signals the end of a phrase)."""
     buffer = ""
-    async for item in async_iter:
-        buffer += item
-        has_punc = any(char in string.punctuation for char in item.strip())
-        if len(item) == 0 or has_punc:
-            yield buffer
-            buffer = ""
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            buffer += item
+            has_punc = any(char in string.punctuation for char in item.strip())
+            if len(item) == 0 or has_punc:
+                yield buffer
+                buffer = ""
 
 
 def tts_rate_limit_step(
@@ -197,23 +199,24 @@ async def raw_audio_rate_limit_step(
         # Compute the amount of audio remaining to be played in seconds.
         return max(0, queued_audio_seconds - (now - last_send))
 
-    async for item in async_iter:
-        resolved_buffer_seconds = await resolve_obj_or_future(buffer_seconds)
-        now = time.perf_counter()
-        # Compute the amount of audio remaining to be played in seconds.
-        remaining_audio_seconds = compute_remaining(now)
-        # If we have more than the buffer, sleep until we hit the buffer limit
-        if remaining_audio_seconds > resolved_buffer_seconds:
-            await asyncio.sleep(remaining_audio_seconds - resolved_buffer_seconds)
-            # We don't know how long we actually slept.
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            resolved_buffer_seconds = await resolve_obj_or_future(buffer_seconds)
             now = time.perf_counter()
+            # Compute the amount of audio remaining to be played in seconds.
             remaining_audio_seconds = compute_remaining(now)
-        resolved_bytes_per_second = await resolve_obj_or_future(bytes_per_second)
-        queued_audio_seconds = (
-            remaining_audio_seconds + len(item) / resolved_bytes_per_second
-        )
-        last_send = now
-        yield item
+            # If we have more than the buffer, sleep until we hit the buffer limit
+            if remaining_audio_seconds > resolved_buffer_seconds:
+                await asyncio.sleep(remaining_audio_seconds - resolved_buffer_seconds)
+                # We don't know how long we actually slept.
+                now = time.perf_counter()
+                remaining_audio_seconds = compute_remaining(now)
+            resolved_bytes_per_second = await resolve_obj_or_future(bytes_per_second)
+            queued_audio_seconds = (
+                remaining_audio_seconds + len(item) / resolved_bytes_per_second
+            )
+            last_send = now
+            yield item
 
 
 async def timed_text_rate_limit_step(
@@ -239,19 +242,20 @@ async def timed_text_rate_limit_step(
         else:
             yield timed_text
 
-    async for timed_text in async_iter:
-        async for token in break_into_tokens(timed_text):
-            now = time.perf_counter()
-            remaining_text_seconds = compute_remaining(now)
-            # If we have more than the buffer, sleep until we hit the buffer limit
-            if remaining_text_seconds > buffer_seconds:
-                await asyncio.sleep(remaining_text_seconds - buffer_seconds)
-                # We don't know how long we actually slept.
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for timed_text in owned_aiter:
+            async for token in break_into_tokens(timed_text):
                 now = time.perf_counter()
                 remaining_text_seconds = compute_remaining(now)
-            queued_text_seconds = remaining_text_seconds + token.duration_in_seconds
-            last_send = now
-            yield token.text
+                # If we have more than the buffer, sleep until we hit the buffer limit
+                if remaining_text_seconds > buffer_seconds:
+                    await asyncio.sleep(remaining_text_seconds - buffer_seconds)
+                    # We don't know how long we actually slept.
+                    now = time.perf_counter()
+                    remaining_text_seconds = compute_remaining(now)
+                queued_text_seconds = remaining_text_seconds + token.duration_in_seconds
+                last_send = now
+                yield token.text
 
 
 async def min_tokens_step(
@@ -260,17 +264,18 @@ async def min_tokens_step(
     """Makes sure we have at least minimum number of tokens, but always flushes on an empty token."""
     buffer = ""
     num_tokens = 0
-    async for item in async_iter:
-        if len(item) == 0:
-            if len(buffer) > 0:
-                yield buffer
-                buffer = ""
-        else:
-            buffer += item
-            num_tokens += 1
-            if num_tokens >= min_tokens:
-                yield buffer
-                buffer = ""
-                num_tokens = 0
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            if len(item) == 0:
+                if len(buffer) > 0:
+                    yield buffer
+                    buffer = ""
+            else:
+                buffer += item
+                num_tokens += 1
+                if num_tokens >= min_tokens:
+                    yield buffer
+                    buffer = ""
+                    num_tokens = 0
     if len(buffer) > 0:
         yield buffer
