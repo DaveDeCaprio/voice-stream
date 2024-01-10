@@ -64,7 +64,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
     )
     pipe = log_step(pipe, "Recognized speech")
     pipe = map_step(pipe, lambda x: {"query": x})
-    pipe = langchain_step(pipe, chain)
+    pipe = langchain_step(pipe, chain, on_completion="")
     pipe = recover_exception_step(
         pipe, Exception, lambda x: "Google blocked the response.  Ending conversation."
     )

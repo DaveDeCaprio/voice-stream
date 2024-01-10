@@ -32,7 +32,7 @@ async def test_llm_and_tts(tmp_path):
             "What is 4*8",
         ]
     )
-    pipe = langchain_step(pipe, chain)
+    pipe = langchain_step(pipe, chain, on_completion="")
     pipe = str_buffer_step(pipe)
     pipe = log_step(pipe, "LLM output")
     text_to_speech_async_client = TextToSpeechAsyncClient()
@@ -52,7 +52,7 @@ async def test_gemini():
         | StrOutputParser()
     )
     pipe = single_source({"query": "What's 2+2?"})
-    pipe = langchain_step(pipe, chain)
+    pipe = langchain_step(pipe, chain, on_completion="")
     ret = await array_sink(pipe)
     assert len(ret) == 2
     assert ret[1] == ""

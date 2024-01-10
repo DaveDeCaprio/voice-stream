@@ -11,16 +11,15 @@ from quart import websocket, current_app
 from voice_stream.basic_streams import (
     FutureOrObj,
     partition_step,
-    resolve_obj_or_future,
     map_step,
     map_str_to_json_step,
     filter_step,
     fork_step,
     extract_value_step,
-    map_future,
     merge_step,
     queue_source,
 )
+from voice_stream.types import map_future, resolve_obj_or_future
 from voice_stream.events import BaseEvent, CallStarted, CallEnded
 from voice_stream.integrations.quart_streams import quart_websocket_source
 
