@@ -18,13 +18,12 @@ from voice_stream.basic_streams import (
     fork_step,
     map_step,
     extract_value_step,
-    map_future,
     FutureOrObj,
-    resolve_obj_or_future,
     async_init_step,
     str_buffer_step,
     filter_step,
 )
+from voice_stream.types import map_future, resolve_obj_or_future
 from voice_stream.events import TimedText
 from voice_stream.substreams import substream_step
 

@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import json
 import logging
-from asyncio import Future, QueueEmpty
+from asyncio import QueueEmpty
 from typing import (
     AsyncIterator,
     Any,
@@ -20,6 +20,7 @@ from typing import (
 import aiofiles
 
 from voice_stream._queue_with_exception import QueueWithException
+from voice_stream.types import to_tuple, resolve_obj_or_future
 
 T = TypeVar("T")
 Output = TypeVar("Output")
@@ -33,68 +34,14 @@ logger = logging.getLogger(__name__)
 # Steps take iterators and return iterators
 
 
-def to_tuple(obj) -> Tuple:
-    if isinstance(obj, Tuple):
-        return obj
-    if isinstance(obj, List):
-        return tuple(obj)
-    else:
-        return (obj,)
-
-
-def from_tuple(obj):
-    return obj[0] if len(obj) == 1 else obj
-
-
-def is_async_iterator(obj):
-    return inspect.iscoroutinefunction(getattr(obj, "__anext__", None)) and hasattr(
-        obj, "__aiter__"
-    )
-
-
-def map_future(f: Future[T], func: Callable[[T], Output]) -> Future[Output]:
-    """Returns a future that will be resolved with the result of applying func to the result of f.
-
-    Words are made lowercase and punctuation is removed
-    before counting.
-
-    Parameters
-    ----------
-    input_file : str
-        Path to text file.
-
-    Returns
-    -------
-    collections.Counter
-        dict-like object where keys are words and values are counts.
-
-    Examples
-    --------
-    >>> count_words("text.txt")
-    """
-    loop = asyncio.get_running_loop()
-    ret = loop.create_future()
-
-    def callback(fut: Future[T]) -> None:
-        try:
-            ret.set_result(func(fut.result()))
-        except Exception as e:
-            ret.set_exception(e)
-
-    f.add_done_callback(callback)
-    return ret
-
-
-async def resolve_obj_or_future(obj: FutureOrObj[T]) -> T:
-    """Returns the result of an object or a future"""
-    if isinstance(obj, asyncio.Future):
-        return await obj
-    return obj
-
-
 def empty_source() -> AsyncIterator[T]:
     """Returns an empty async iterator that immediately sends an end of iteration."""
     return array_source([])
+
+
+def none_source() -> AsyncIterator[T]:
+    """Returns an async iterator that returns one item, which is None."""
+    return array_source([None])
 
 
 async def empty_sink(async_iter: AsyncIterator[T]) -> None:

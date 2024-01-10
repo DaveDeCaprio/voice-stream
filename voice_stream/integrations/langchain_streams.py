@@ -6,6 +6,7 @@ from langchain_core.runnables import Runnable
 
 from voice_stream.basic_streams import (
     fork_step,
+    Output,
 )
 from voice_stream.speech_to_text_streams import (
     filter_spurious_speech_start_events_step,
@@ -16,6 +17,7 @@ from voice_stream.text_to_speech_streams import (
     TextToSpeechStep,
     tts_with_buffer_and_rate_limit_step,
 )
+from voice_stream.types import Input, SourceConvertable, to_source
 
 GenericStepFunc = Callable[[AsyncIterator[Any]], AsyncIterator[Any]]
 
@@ -47,7 +49,7 @@ class LangchainVoiceFlow:
         def create_output_chain(
             pipe: AsyncIterator[str],
         ) -> (AsyncIterator[bytes], AsyncIterator[str]):
-            pipe = langchain_step(pipe, chain)
+            pipe = langchain_step(pipe, chain, on_completion="")
             if langchain_postprocess:
                 pipe = langchain_postprocess(pipe)
             # pipe = log_step(pipe, "Token")
@@ -64,11 +66,20 @@ class LangchainVoiceFlow:
 
 
 async def langchain_step(
-    async_iter: AsyncIterator[str], chain: Runnable[str, str]
-) -> AsyncIterator[str]:
+    async_iter: AsyncIterator[str],
+    chain: Runnable[Input, Output],
+    input_key: Optional[str] = None,
+    config_key: Optional[str] = None,
+    on_completion: SourceConvertable = None,
+) -> AsyncIterator[Output]:
     """Runs a chain for each text item sent in, streams back response tokens."""
-    async for text in async_iter:
-        async for token in chain.astream(text):
-            yield token
-        yield ""  # Forces an empty token to help flush buffers.
     # Note on cancelling - https://github.com/langchain-ai/langchain/issues/11959
+    async for text in async_iter:
+        input = text[input_key] if input_key else text
+        config = text[config_key] if config_key else None
+        async for token in chain.astream(input, config=config):
+            yield token
+        if on_completion:
+            source = to_source(on_completion)
+            async for item in source:
+                yield item

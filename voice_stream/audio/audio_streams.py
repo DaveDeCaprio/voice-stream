@@ -12,7 +12,8 @@ from voice_stream.audio.async_wav_file import (
 from voice_stream.audio import AudioFormatError, AudioFormat
 from voice_stream.audio.audio_mp3 import find_frame_boundaries, calculate_split_points
 from voice_stream.audio.audio_ogg import OggPage, OpusIdPacket
-from voice_stream.basic_streams import resolve_obj_or_future, FutureOrObj
+from voice_stream.basic_streams import FutureOrObj
+from voice_stream.types import resolve_obj_or_future
 
 logger = logging.getLogger(__name__)
 

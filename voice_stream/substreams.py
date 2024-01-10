@@ -4,7 +4,6 @@ from typing import (
     AsyncIterator,
     Callable,
     Tuple,
-    TypeVar,
     Any,
     Optional,
     List,
@@ -15,15 +14,17 @@ from voice_stream._substream_iters import SwitchableIterator
 from voice_stream.basic_streams import (
     single_source,
     queue_source,
-    empty_source,
     concat_step,
-    to_tuple,
-    from_tuple,
     empty_sink,
 )
-
-T = TypeVar("T")
-Output = TypeVar("Output")
+from voice_stream.types import (
+    T,
+    Output,
+    to_source,
+    to_tuple,
+    from_tuple,
+    SourceConvertable,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ def cancelable_substream_step(
     async_iter: AsyncIterator[T],
     cancel_iter: AsyncIterator[T],
     substream_func: Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
-    cancel_messages: Optional[List[Any]] = None,
+    cancel_messages: Optional[List[SourceConvertable]] = None,
 ):
     """Creates a new substream for each input to async_iter.  If any item comes in on cancel_iter, it immediately stops
     the processing of the current substream, and optionally sends cancel_messages.
@@ -137,7 +138,7 @@ def interruptable_substream_step(
         [AsyncIterator[T]],
         Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
     ],
-    cancel_messages: Optional[List[Any]] = None,
+    cancel_messages: Optional[List[SourceConvertable]] = None,
 ):
     """For each input, creates a new substream and runs it.
     If a new item comes in, the old item is immediately cancelled and a new one is created.
@@ -187,22 +188,15 @@ def interruptable_substream_step(
     return from_tuple(output_iters)
 
 
-def _create_cancel_messages(outputs, cancel_messages):
+def _create_cancel_messages(
+    outputs: List[AsyncIterator], cancel_messages: Optional[List[SourceConvertable]]
+):
     if cancel_messages and len(cancel_messages) != len(outputs):
         raise ValueError(
-            f"cancel_messages must be the same length as the number of outputs for the substream.  Got {len(cancel_messages)} cancel messages and {len(output_iters)} substream outputs."
+            f"cancel_messages must be the same length as the number of outputs for the substream.  Got {len(cancel_messages)} cancel messages and {len(outputs)} substream outputs."
         )
 
-    def create_cancel(x):
-        if callable(x):
-            return x()
-        elif x:
-            logger.debug(f"SINGLE SOURCE {x}")
-            return single_source(x)
-        else:
-            return empty_source()
-
-    return [create_cancel(_) for _ in cancel_messages]
+    return [to_source(_) for _ in cancel_messages]
 
 
 def _switch_outputs(

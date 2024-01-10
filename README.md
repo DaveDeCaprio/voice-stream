@@ -56,7 +56,7 @@ The main value props of VoiceStream is:
 
 ## 📖 Documentation
 
-Please see [here](https://python.langchain.com) for full documentation, which includes:
+Please see [here](https://voice-stream.readthedocs.io/en/latest/) for full documentation, which includes:
 
 <!-- start doc-highlights -->
 TODO
