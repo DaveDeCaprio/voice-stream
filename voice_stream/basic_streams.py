@@ -9,7 +9,6 @@ from typing import (
     Tuple,
     Callable,
     Union,
-    TypeVar,
     Optional,
     Type,
     Iterable,
@@ -20,11 +19,7 @@ from typing import (
 import aiofiles
 
 from voice_stream._queue_with_exception import QueueWithException
-from voice_stream.types import to_tuple, resolve_obj_or_future
-
-T = TypeVar("T")
-Output = TypeVar("Output")
-FutureOrObj = Union[T, asyncio.Future[T]]
+from voice_stream.types import to_tuple, resolve_obj_or_future, T, Output, FutureOrObj
 
 logger = logging.getLogger(__name__)
 

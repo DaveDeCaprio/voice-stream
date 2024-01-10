@@ -1,19 +1,13 @@
 import asyncio
+import importlib
 import inspect
 from asyncio import Future
 from typing import TypeVar, Tuple, List, Optional, Union, Callable, AsyncIterator
 
-from voice_stream.basic_streams import (
-    single_source,
-    empty_source,
-    T,
-    Output,
-    FutureOrObj,
-)
-
 T = TypeVar("T")
 Input = TypeVar("Input", contravariant=True)
 Output = TypeVar("Output", covariant=True)
+FutureOrObj = Union[T, asyncio.Future[T]]
 
 SourceConvertable = Optional[Union[Callable[[], T], T]]
 
@@ -23,8 +17,12 @@ def to_source(x: SourceConvertable) -> AsyncIterator[T]:
     if callable(x):
         return x()
     elif x:
+        from voice_stream.basic_streams import single_source
+
         return single_source(x)
     else:
+        from voice_stream.basic_streams import empty_source
+
         return empty_source()
 
 
@@ -85,3 +83,20 @@ async def resolve_obj_or_future(obj: FutureOrObj[T]) -> T:
     if isinstance(obj, asyncio.Future):
         return await obj
     return obj
+
+
+def load_attribute(full_path):
+    # Split the path into module and attribute
+    parts = full_path.split(".")
+    module_path = ".".join(parts[:-1])
+    attribute_name = parts[-1]
+
+    try:
+        # Import the module
+        module = importlib.import_module(module_path)
+        # Return the attribute
+        return getattr(module, attribute_name)
+    except ImportError:
+        print(f"Module {module_path} not found.")
+    except AttributeError:
+        print(f"Attribute {attribute_name} not found in module {module_path}.")
