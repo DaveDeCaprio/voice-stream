@@ -7,7 +7,7 @@ The server uses FastAPI to serve a web page with start and stop audio buttons.
 
 ## Installation
 
-```{include} ../README.md
+```{include} ../../README.md
 :start-after: <!-- start install -->
 :end-before: <!-- end install -->
 ```
@@ -29,7 +29,7 @@ Most other integrations can be installed in the same way, by replacing 'quicksta
 
 Here is the code for our server.  You can also find it in the [examples directory of the VoiceStream repo](https://github.com/DaveDeCaprio/voice-stream/blob/main/examples/quickstart.py).
 
-```{include} ../examples/quickstart.py
+```{include} ../../examples/quickstart.py
 ```
 
 Save this code as quickstart.py.  We'll walk through it, but for now you can run it using uvicorn.  Because the audio is
@@ -99,9 +99,9 @@ Press the "Start Voice Chat" button and begin talking.  Google LLM will converse
 
 From here, take a look at the rest of the documentation to see what else you can build with VoiceStream.
 
-```{include} ../README.md
-:start-after: <!-- start more-docs -->
-:end-before: <!-- end more-docs -->
+```{include} ../../README.md
+:start-after: <!-- start doc-highlights -->
+:end-before: <!-- end doc-highlights -->
 ```
 
 

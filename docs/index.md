@@ -12,10 +12,10 @@ hide-toc: true
 ```{toctree}
 :hidden:
 
-getting-started/index
+getting_started/index
 concepts/index
 cookbook/index
-reference/index
+reference
 ```
 
 ```{toctree}
@@ -23,7 +23,6 @@ reference/index
 :hidden:
 
 contributing/index
-stability
 changelog
 license
 ```

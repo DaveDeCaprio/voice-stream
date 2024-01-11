@@ -14,7 +14,13 @@ release = "0.3.0"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["myst_parser"]
+extensions = [
+    "myst_parser",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
+    "sphinxext.opengraph",
+    "sphinx_copybutton",
+]
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
@@ -31,3 +37,8 @@ html_theme_options = {
     "sidebar_hide_name": True,
     "navigation_with_keys": True,
 }
+
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(".."))
