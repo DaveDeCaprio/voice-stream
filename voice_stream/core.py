@@ -599,6 +599,7 @@ def map_str_to_json_step(async_iter: AsyncIterator[str]) -> AsyncIterator[dict]:
     [30, 25]
     return map_step(async_iter, lambda x: json.loads(x))
     """
+    return map_step(async_iter, lambda x: json.loads(x))
 
 
 async def flatten_step(async_iter: AsyncIterator[Iterable[T]]) -> AsyncIterator[T]:

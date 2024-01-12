@@ -125,7 +125,7 @@ def cancelable_substream_step(
             next_substream = to_tuple(substream_func(next_source))
         monitor_cancel_task.cancel()
         await next_source.put(EndOfStreamMarker)
-        await asyncio.wait([empty_sink(i) for i in next_substream])
+        await asyncio.wait([asyncio.create_task(empty_sink(i)) for i in next_substream])
         for i in output_iters:
             i.end_iteration()
 

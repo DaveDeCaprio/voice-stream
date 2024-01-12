@@ -182,7 +182,7 @@ async def test_interruptable_substream_step():
         async for item in iter:
             # logger.info("In substream")
             yield f"Substream {instance_count} Output 1: {item}"
-            asyncio.sleep(0.1)
+            await asyncio.sleep(0.1)
             yield f"Substream {instance_count} Output 2: {item}"
 
     pipe = generator()
