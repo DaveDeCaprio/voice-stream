@@ -3547,4 +3547,4 @@ twilio = ["twilio"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "29a289cebe4acb70f14aad58d5a908f00761a132d9f657670d9998dc4062b3ac"
+content-hash = "ce9261d3ebd0d9101672b7a8cfbfd574bb50b7766e00d1bee8ac432ab191001f"

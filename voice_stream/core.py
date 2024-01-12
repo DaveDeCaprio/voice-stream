@@ -234,13 +234,40 @@ async def array_sink(async_iter: AsyncIterator[T]) -> list[T]:
 
 
 class QueueAsyncIterator:
-    """An AsyncIterator that works over its own queue and adds a 'put' method."""
+    """
+    An asynchronous iterator that operates on its own queue.
+
+    This class implements an async iterator which allows asynchronous iteration over
+    queued items. It uses an asyncio.Queue for storing items and provides a `put` method
+    to add items to this queue. The iterator retrieves items from the queue in the order
+    they were added.
+
+    Methods
+    -------
+    put(self, item):
+        Asynchronously add an item to the queue.
+        Parameters:
+            item : any type
+                The item to be added to the queue.
+
+    Examples
+    --------
+    >>> queue = queue_source() # With no input arguments, this returns a QueueAsyncIterator.
+    >>> pipe = queue
+    >>> done = array_sink()
+    >>> await queue_iter.put(1)
+    >>> await queue_iter.put(2)
+    >>> await queue_iter.put(EndOfStreaMarker)
+    >>> ret = await done
+    >>> assert ret == [1, 2]
+    """
 
     def __init__(self):
         self.queue = asyncio.Queue()
         self.iter = queue_source(self.queue)
 
     async def put(self, item):
+        """Adds an item to the queue managed by this iterator."""
         return await self.queue.put(item)
 
     def __aiter__(self):
