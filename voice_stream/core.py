@@ -19,7 +19,7 @@ from typing import (
 import aiofiles
 import asyncstdlib
 
-from voice_stream._queue_with_exception import QueueWithException
+from voice_stream.queue_with_exception import QueueWithException
 from voice_stream.types import (
     to_tuple,
     resolve_awaitable_or_obj,
@@ -336,8 +336,43 @@ def queue_source(
 async def queue_sink(
     async_iter: AsyncIterator[T],
     queue: Optional[AwaitableOrObj[asyncio.Queue]] = None,
+    end_of_stream=EndOfStreamMarker,
 ) -> asyncio.Queue:
-    """Writes each element of the async_iter to a queue"""
+    """
+    Consumes elements from an asynchronous iterator and writes them to a queue.
+
+    This function takes an asynchronous iterator and writes each element it yields into a queue.
+    If a queue is provided, it is used; otherwise, a new asyncio.Queue is created. Upon completion
+    or exception it signals the end of the stream.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An asynchronous iterator from which elements are read.
+    queue : Optional[AwaitableOrObj[asyncio.Queue]], optional
+        An optional asyncio.Queue or an awaitable resulting in an asyncio.Queue.
+        If not provided, a new :class:`~voice_stream:QueueWithException` is created.
+    end_of_stream : The item to enqueue to indicate the stream has ended.  Defaults to EndOfStreamMarker
+
+    Returns
+    -------
+    asyncio.Queue
+        The queue to which the elements from async_iter are written.
+
+    Examples
+    --------
+    >>> pipe = array_source([1,2])
+    >>> queue = await queue_sink()
+    >>> assert len(queue) == 2
+    >>> assert queue.get() == 1
+    >>> assert queue.get() == 2
+    >>> assert queue.empty()
+
+    Notes
+    --------
+    * If the Queue has a `set_exception` method, that will be called when an exception is thrown by the iterator.  The
+    :class:`~voice_stream:QueueWithException` has this method, and uses it to throw the exception on the next call to `queue.get`.
+    """
     resolved_queue = None
     try:
         async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
@@ -354,7 +389,7 @@ async def queue_sink(
         else:
             raise e
     if resolved_queue:
-        await resolved_queue.put(EndOfStreamMarker)  # signal completion
+        await resolved_queue.put(end_of_stream)  # signal completion
     return resolved_queue
 
 

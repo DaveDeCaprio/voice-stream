@@ -38,6 +38,7 @@ from voice_stream.core import (
     none_source,
     QueueAsyncIterator,
 )
+from voice_stream.queue_with_exception import QueueWithException
 from voice_stream.speech_to_text import (
     filter_spurious_speech_start_events_step,
     speech_with_start_detection_step,
@@ -98,6 +99,7 @@ __all__ = [
     "queue_sink",
     "queue_source",
     "QueueAsyncIterator",
+    "QueueWithException",
     "raw_audio_rate_limit_step",
     "recover_exception_step",
     "speech_with_start_detection_step",
