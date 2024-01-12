@@ -13,9 +13,9 @@ build:
       - pip install poetry
       - poetry config virtualenvs.create false
     post_install:
-      - poetry install --with docs
+      - poetry install --all-extras
       # Attempt to remedy repeated errors: ModuleNotFoundError: No module named 'typing_extensions'
-      - pip install typing_extensions
+      #- pip install typing_extensions
       - poetry version $(git describe --tags --abbrev=0)
       - cd docs;python gen_api_lists.py
 
