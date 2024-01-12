@@ -394,7 +394,34 @@ async def queue_sink(
 
 
 async def text_file_source(filename: str) -> AsyncIterator[str]:
-    """Returns an async iterator over the lines in the file"""
+    """
+    Provides an asynchronous iterator over the lines in a text file.
+
+    This function asynchronously reads a text file line by line, yielding each line without the trailing newline
+    character.
+
+    Parameters
+    ----------
+    filename : str
+        The path to the text file to be read.
+
+    Returns
+    -------
+    AsyncIterator[str]
+        An asynchronous iterator yielding lines from the file as strings.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file specified by filename does not exist.
+    IOError
+        If an I/O error occurs while opening or reading the file.
+
+    Examples
+    --------
+    >>> pipe = text_file_source("example.txt")
+    >>> done = awaittext_file_sink(pipe, "copy.txt")
+    """
     async with aiofiles.open(filename, "rt") as f:
         async for line in f:
             line = line[:-1] if line[-1] == "\n" else line
