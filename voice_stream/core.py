@@ -339,7 +339,7 @@ async def queue_sink(
     end_of_stream=EndOfStreamMarker,
 ) -> asyncio.Queue:
     """
-    Consumes elements from an asynchronous iterator and writes them to a queue.
+    Data flow sink that writes items to a queue.
 
     This function takes an asynchronous iterator and writes each element it yields into a queue.
     If a queue is provided, it is used; otherwise, a new asyncio.Queue is created. Upon completion
@@ -395,7 +395,7 @@ async def queue_sink(
 
 async def text_file_source(filename: str) -> AsyncIterator[str]:
     """
-    Provides an asynchronous iterator over the lines in a text file.
+    Data flow source that yields the lines in a text file.
 
     This function asynchronously reads a text file line by line, yielding each line without the trailing newline
     character.
@@ -420,7 +420,7 @@ async def text_file_source(filename: str) -> AsyncIterator[str]:
     Examples
     --------
     >>> pipe = text_file_source("example.txt")
-    >>> done = awaittext_file_sink(pipe, "copy.txt")
+    >>> done = await text_file_sink(pipe, "copy.txt")
     """
     async with aiofiles.open(filename, "rt") as f:
         async for line in f:
@@ -431,14 +431,74 @@ async def text_file_source(filename: str) -> AsyncIterator[str]:
 async def text_file_sink(
     async_iter: AsyncIterator[Any], filename: AwaitableOrObj[str]
 ) -> None:
-    """Write each element of the async_iter to a file as a line"""
+    """
+    Data flow sink that writes each element to a file, each as a new line.
+
+    This function takes each element from the provided async iterator and writes it to the specified
+    text file. Each element is converted to a string and written as a separate line. The filename
+    can be either a string or an awaitable object that resolves to a string.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[Any]
+        An asynchronous iterator whose elements are to be written to the file.
+    filename : AwaitableOrObj[str]
+        The path to the file where the data will be written. This can be a string or an
+        awaitable object that yields a string.  The object will be awaited only after the first element is received
+        from the iterator.
+
+    Returns
+    -------
+    None
+        This function does not return a value but completes when all elements have been
+        written to the file.
+
+    Examples
+    --------
+    >>> pipe = text_file_source("example.txt")
+    >>> done = await text_file_sink(pipe, "copy.txt")
+    """
     return await _file_sink(async_iter, filename, "wt", lambda x: f"{x}\n")
 
 
 async def binary_file_source(
     filename: str, chunk_size: int = 4096
 ) -> AsyncIterator[bytes]:
-    """Returns an async iterator over the bytes in the file"""
+    """
+    Data flow source that yields chunks of bytes from a binary file.
+
+    This function opens a binary file and asynchronously reads it in chunks of a specified size.
+    It yields each chunk of bytes until the end of the file is reached. This is particularly useful
+    for processing large binary files in an asynchronous manner.
+
+    Parameters
+    ----------
+    filename : str
+        The path to the binary file to be read.
+    chunk_size : int, optional
+        The number of bytes to read in each chunk. Defaults to 4096 bytes.  Pass 0 to read in the whole file at once.
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        An asynchronous iterator yielding chunks of bytes from the file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file specified by filename does not exist.
+    IOError
+        If an I/O error occurs while opening or reading the file.
+
+    Examples
+    --------
+    >>> pipe = binary_file_source("example.bin")
+    >>> pipe = log_step(pipe, "Bytes read", lambda x: len(x))
+    >>> done = await binary_file_sink("copy.bin")
+    Bytes read 4096
+    Bytes read 4096
+    Bytes read 1024  # Example output for a 9216-byte file
+    """
     async with aiofiles.open(filename, "rb") as f:
         while True:
             chunk = await f.read(chunk_size)
@@ -450,7 +510,45 @@ async def binary_file_source(
 async def binary_file_sink(
     async_iter: AsyncIterator[bytes], filename: AwaitableOrObj[str]
 ) -> None:
-    """Append each block of bytes from async_iter to the file"""
+    """
+    Data flow sink that writes chunks of bytes to a binary file.
+
+    This function takes each block of bytes yielded by the provided async iterator and appends it to
+    the specified binary file. The filename can be either a string or an awaitable object that resolves
+    to a string.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator yielding blocks of bytes to be written to the file.
+    filename : AwaitableOrObj[str]
+        The path to the binary file where the data will be appended. This can be a string or an
+        awaitable object that yields a string.
+
+    Returns
+    -------
+    None
+        This function does not return a value but completes when all blocks of bytes have been
+        appended to the file.
+
+    Raises
+    ------
+    IOError
+        If an I/O error occurs while opening or writing to the file.
+
+    Examples
+    --------
+    >>> pipe = binary_file_source("example.bin")
+    >>> pipe = log_step(pipe, "Bytes read", lambda x: len(x))
+    >>> done = await binary_file_sink("copy.bin")
+    Bytes read 4096
+    Bytes read 4096
+    Bytes read 1024  # Example output for a 9216-byte file
+
+    Notes
+    -----
+    *  If an awaitable is passed, it is not waited on until the first item has been retrieved from the iterator.
+    """
     return await _file_sink(async_iter, filename, "wb", lambda x: x)
 
 
