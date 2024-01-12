@@ -76,10 +76,5 @@ class QueueWithException(asyncio.Queue):
 
         When an exception is set, the EndOfStreamMarker is enqueued and when that marker is removed from the queue,
         the exception will be raised.
-
-        Parameters:
-        -----------
-            exception
-                The exception to be thrown when the appropriate item is removed from the queue.
         """
         self.exception = exception

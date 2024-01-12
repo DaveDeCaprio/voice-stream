@@ -27,6 +27,7 @@ from voice_stream.types import (
     Output,
     AwaitableOrObj,
     EndOfStreamMarker,
+    is_async_iterator,
 )
 
 logger = logging.getLogger(__name__)
@@ -602,12 +603,14 @@ def map_str_to_json_step(async_iter: AsyncIterator[str]) -> AsyncIterator[dict]:
     return map_step(async_iter, lambda x: json.loads(x))
 
 
-async def flatten_step(async_iter: AsyncIterator[Iterable[T]]) -> AsyncIterator[T]:
+async def flatten_step(
+    async_iter: AsyncIterator[Iterable[T] | AsyncIterator[T]],
+) -> AsyncIterator[T]:
     """
-    Data flow step that flattens an iterator of iterators into a sinle iterator.
+    Data flow step that flattens an iterator of iterators into a single iterator.
 
-    This function takes an asynchronous iterator where each item is itself an iterable (like a list or tuple)
-    and flattens it. This means it iterates over each element of these iterables in order, yielding them
+    This function takes an asynchronous iterator where each item is itself an async iterator or a regular iterable
+    (like a list or tuple) and flattens it. This means it iterates over each element of these iterables in order, yielding them
     individually. It's useful for converting a stream of iterables into a flat stream of elements.
 
     Parameters
@@ -629,18 +632,12 @@ async def flatten_step(async_iter: AsyncIterator[Iterable[T]]) -> AsyncIterator[
     """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
-            for subitem in item:
-                yield subitem
-
-
-async def async_flatten_step(
-    async_iter: AsyncIterator[AsyncIterator[T]],
-) -> AsyncIterator[T]:
-    """Takes an async iterator where each item is an AsyncIterator and iterates over it."""
-    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
-        async for item in owned_aiter:
-            async with asyncstdlib.scoped_iter(item) as owned_subiter:
-                async for subitem in owned_subiter:
+            if is_async_iterator(item):
+                async with asyncstdlib.scoped_iter(item) as owned_subiter:
+                    async for subitem in owned_subiter:
+                        yield subitem
+            else:
+                for subitem in item:
                     yield subitem
 
 
