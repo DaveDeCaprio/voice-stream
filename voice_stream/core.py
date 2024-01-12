@@ -574,7 +574,33 @@ async def _file_sink(
 
 
 def map_str_to_json_step(async_iter: AsyncIterator[str]) -> AsyncIterator[dict]:
+    """
+    Data flow step that parses JSON strings into dictionaries.
+
+    Each string element from the async iterator is parsed as JSON and transformed into a dictionary.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[str]
+        An asynchronous iterator yielding strings, each expected to be a valid JSON text.
+
+    Returns
+    -------
+    AsyncIterator[dict]
+        An asynchronous iterator yielding dictionaries resulting from JSON parsing of each string element.
+
+    Examples
+    --------
+    >>> pipe = array_source([
+    ...     '{"name": "Alice", "age": 30}',
+    ...     '{"name": "Bob", "age": 25}',
+    ... ])
+    >>> pipe = map_str_to_json_step(pipe)
+    >>> pipe = map_step(pipe, lambda x: x['age'])
+    >>> await array_sink(pipe)
+    [30, 25]
     return map_step(async_iter, lambda x: json.loads(x))
+    """
 
 
 async def flatten_step(async_iter: AsyncIterator[Iterable[T]]) -> AsyncIterator[T]:
