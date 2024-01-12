@@ -15,6 +15,7 @@ build:
     post_install:
       - poetry install --with docs
       - poetry version $(git describe --tags --abbrev=0)
+      - cd docs;python gen_api_lists.py
 
 sphinx:
   configuration: docs/conf.py
