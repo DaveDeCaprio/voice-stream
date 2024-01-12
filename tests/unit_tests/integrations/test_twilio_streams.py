@@ -7,7 +7,7 @@ from voice_stream import (
     filter_step,
     array_sink,
 )
-from voice_stream.integrations.twilio_streams import (
+from voice_stream.integrations.twilio import (
     twilio_check_sequence_step,
     twilio_split_media_step,
 )

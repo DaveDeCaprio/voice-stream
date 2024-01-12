@@ -10,7 +10,7 @@ from google.cloud.speech_v2 import (
     AutoDetectDecodingConfig,
 )
 
-from voice_stream.audio.audio_streams import AudioFormat
+from voice_stream.audio.audio import AudioFormat
 
 GoogleDecodingConfig = Optional[Union[AudioFormat, ExplicitDecodingConfig]]
 

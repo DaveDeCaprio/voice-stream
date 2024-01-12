@@ -3,7 +3,7 @@ import datetime
 import logging
 from typing import AsyncIterator, Callable, Tuple
 
-from voice_stream.basic_streams import log_step
+from voice_stream.core import log_step
 from voice_stream.events import SpeechStart, BaseEvent, SpeechEnd
 
 logger = logging.getLogger(__name__)

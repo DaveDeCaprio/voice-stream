@@ -1,5 +1,5 @@
-from voice_stream.audio.audio import AudioFormat, AudioFormatError
-from voice_stream.audio.audio_streams import (
+from voice_stream.audio.audio_utils import AudioFormat, AudioFormatError
+from voice_stream.audio.audio import (
     ogg_page_separator_step,
     ogg_concatenator_step,
     wav_mulaw_file_source,

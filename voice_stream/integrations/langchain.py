@@ -5,16 +5,16 @@ from typing import AsyncIterator, Callable, Any, Optional
 import asyncstdlib
 from langchain_core.runnables import Runnable
 
-from voice_stream.basic_streams import (
+from voice_stream.core import (
     fork_step,
     Output,
 )
-from voice_stream.speech_to_text_streams import (
+from voice_stream.speech_to_text import (
     filter_spurious_speech_start_events_step,
     SpeechStep,
 )
 from voice_stream.substreams import cancelable_substream_step
-from voice_stream.text_to_speech_streams import (
+from voice_stream.text_to_speech import (
     TextToSpeechStep,
     tts_with_buffer_and_rate_limit_step,
 )

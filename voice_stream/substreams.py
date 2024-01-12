@@ -11,7 +11,7 @@ from typing import (
 )
 
 from voice_stream._substream_iters import SwitchableIterator
-from voice_stream.basic_streams import (
+from voice_stream.core import (
     single_source,
     queue_source,
     concat_step,
@@ -24,6 +24,7 @@ from voice_stream.types import (
     to_tuple,
     from_tuple,
     SourceConvertable,
+    EndOfStreamMarker,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,12 +119,12 @@ def cancelable_substream_step(
             substream_completed.clear()
             _switch_outputs(output_iters, next_substream)
             await next_source.put(item)
-            await next_source.put(None)
+            await next_source.put(EndOfStreamMarker)
             await substream_completed.wait()
             next_source = queue_source()
             next_substream = to_tuple(substream_func(next_source))
         monitor_cancel_task.cancel()
-        await next_source.put(None)
+        await next_source.put(EndOfStreamMarker)
         await asyncio.wait([empty_sink(i) for i in next_substream])
         for i in output_iters:
             i.end_iteration()
@@ -176,7 +177,7 @@ def interruptable_substream_step(
             # logger.debug("Running substream")
             active_source = next_source
             await active_source.put(item)
-            await active_source.put(None)
+            await active_source.put(EndOfStreamMarker)
             next_source = queue_source()
             next_substream = to_tuple(substream_func(next_source))
         logger.debug("Completed interruptable substream iter")

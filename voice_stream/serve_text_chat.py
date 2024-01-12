@@ -9,11 +9,11 @@ from langchain_community.cache import SQLiteCache
 from langchain_core.globals import set_llm_cache
 
 from voice_stream import map_step
-from voice_stream.integrations.fastapi_streams import (
+from voice_stream.integrations.fastapi import (
     fastapi_websocket_text_source,
     fastapi_websocket_text_sink,
 )
-from voice_stream.integrations.langchain_streams import langchain_step
+from voice_stream.integrations.langchain import langchain_step
 from voice_stream.types import load_attribute
 
 logger = logging.getLogger(__name__)

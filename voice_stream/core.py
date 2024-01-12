@@ -20,7 +20,14 @@ import aiofiles
 import asyncstdlib
 
 from voice_stream._queue_with_exception import QueueWithException
-from voice_stream.types import to_tuple, resolve_obj_or_future, T, Output, FutureOrObj
+from voice_stream.types import (
+    to_tuple,
+    resolve_awaitable_or_obj,
+    T,
+    Output,
+    AwaitableOrObj,
+    EndOfStreamMarker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +38,91 @@ logger = logging.getLogger(__name__)
 
 
 def empty_source() -> AsyncIterator[T]:
-    """Returns an empty async iterator that immediately sends an end of iteration."""
+    """
+    Data flow source that returns an empty asynchronous iterator.
+
+    This function provides a utility to create an empty asynchronous iterator. The returned iterator will immediately
+    signal the end of iteration when iterated over, as it contains no elements.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator that yields no items and immediately ends iteration.
+
+    Examples
+    --------
+    >>> pipe = empty_source()
+    >>> done = await array_sink(pipe)
+    >>> assert done == []
+
+    Notes
+    -----
+    - The generic type `T` in `AsyncIterator[T]` indicates that the function can theoretically return
+      an iterator of any type, but since it's initialized with an empty list, no items of any type are yielded.
+    """
     return array_source([])
 
 
-def none_source() -> AsyncIterator[T]:
-    """Returns an async iterator that returns one item, which is None."""
+def none_source() -> AsyncIterator[None]:
+    """
+    Data flow source that yields a single None value.
+
+    This function is a simple utility for generating an asynchronous iterator that yields exactly one item,
+    which is `None` before signaling the end of iteration.  This is useful when you want to send 'None' as a
+    cancel signal to a substream function.
+
+    Returns
+    -------
+    AsyncIterator[None]
+        An asynchronous iterator that yields a single item, `None`.
+
+    Examples
+    --------
+    >>> pipe = empty_source()
+    >>> done = await array_sink(pipe)
+    >>> assert done == [None]
+
+    Notes
+    -----
+    - The type `T` in `AsyncIterator[T]` is a placeholder indicating the iterator can be of any type.
+      In this specific case, the iterator yields items of type `NoneType`.
+
+    See Also
+    --------
+    :func:`~voice_stream.interruptable_substream_step`
+    :func:`~voice_stream.cancelable_substream_step`
+    """
     return array_source([None])
 
 
 async def empty_sink(async_iter: AsyncIterator[T]) -> None:
-    """An async iterator created from an array.  Returns the array."""
+    """
+    Data flow sink that performs no action on the received items.
+
+    This function asynchronously iterates over all items from the provided iterator, effectively 'emptying' it.
+    Each item is retrieved but not used. This is useful in cases where the useful work in a data flow is done as
+    a side effect of a previous iterator.  Since data flows are "pull-based", each branch must end in some kind of sink.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An asynchronous iterator whose items will be consumed. The type `T` is generic and can represent
+        any type of item that the iterator yields.
+
+    Returns
+    -------
+    None
+        This function does not return any value.
+
+    Examples
+    --------
+    >>> # If your only goal is to log values and not do anything with them
+    >>> # The data flow still needs to have a sink to run correctly.
+    >>>
+    >>> pipe = array_source([1,2,3])
+    >>> pipe = log_step(pipe, "Value")
+    >>> await empty_sink(pipe)
+    """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for _ in owned_aiter:
             pass
@@ -49,20 +130,102 @@ async def empty_sink(async_iter: AsyncIterator[T]) -> None:
 
 
 async def single_source(item: T) -> AsyncIterator[T]:
-    """An async iterator created from an array."""
+    """
+    Data flow source that yields a single specified item.
+
+    This function generates an asynchronous iterator that yields exactly one item, the one passed as
+    an argument.
+
+    Parameters
+    ----------
+    item : T
+        The item to be yielded by the asynchronous iterator. The generic type `T` allows for any type
+        of item to be provided.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator that yields the provided item once.
+
+    Examples
+    --------
+    >>> pipe = single_source("Hello, world")
+    >>> ret = await array_sink(pipe)
+    >>> assert ret == ["Hello, world"]
+
+    Notes
+    -----
+    -  Often used with a :func:`~voice_stream.concat_step` to add an object ot the beginning or end of
+    a stream.
+    """
     await asyncio.sleep(0)
     yield item
 
 
 async def array_source(array: list[T]) -> AsyncIterator[T]:
-    """An async iterator created from an array."""
+    """
+    Data flow source the yields items from a list.
+
+    This function takes a list and converts it into an asynchronous iterator. Each element of the list
+    is yielded one by one in an asynchronous fashion.
+
+    Parameters
+    ----------
+    array : list[T]
+        A list of items of type `T`. The elements of this list will be yielded by the asynchronous iterator.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator that yields each element of the input list.
+
+    Examples
+    --------
+    >>> pipe = array_source([1,2,3])
+    >>> pipe = log_step(pipe, "Value")
+    >>> await empty_sink(pipe)
+
+    Notes
+    -----
+    - This source is useful when an existing list needs to be processed asynchronously.
+    """
     for item in array:
         await asyncio.sleep(0)
         yield item
 
 
 async def array_sink(async_iter: AsyncIterator[T]) -> list[T]:
-    """An async iterator created from an array.  Returns the array."""
+    """
+    Data flow sink that collects items into a list.
+
+    This function asynchronously iterates over all items from the provided iterator and collects
+    them into a list. This is useful for when you want to convert an asynchronous stream of data into a
+    synchronous data structure like a list.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An asynchronous iterator from which items will be consumed. The generic type `T` can represent
+        any type of item that the iterator yields.
+
+    Returns
+    -------
+    list[T]
+        A list containing all the items yielded by the asynchronous iterator.
+
+    Examples
+    --------
+    >>> pipe = array_source([1,2,3])
+    >>> pipe = log_step(pipe, "Value")
+    >>> ret = await array_sink(pipe)
+    >>> assert ret == [1,2,3]
+
+    Notes
+    -----
+    - This sink is ideal for scenarios where the entirety of an asynchronous data stream needs to be
+      collected and processed at once.
+    - The sink does end up holding all the collected items in memory, which can cause memory issues with very large streams.
+    """
     array = []
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
@@ -75,7 +238,7 @@ class QueueAsyncIterator:
 
     def __init__(self):
         self.queue = asyncio.Queue()
-        self.iter = _make_queue_iterator(self.queue)
+        self.iter = queue_source(self.queue)
 
     async def put(self, item):
         return await self.queue.put(item)
@@ -87,16 +250,51 @@ class QueueAsyncIterator:
         return await self.iter.__anext__()
 
 
-def queue_source(queue: FutureOrObj[asyncio.Queue[T]] = None) -> AsyncIterator[T]:
-    """Returns an async iterator over objects in a queue.  The queue must be closed by putting None into it."""
+def queue_source(
+    queue: AwaitableOrObj[asyncio.Queue[T]] = None,
+) -> Union[AsyncIterator[T], QueueAsyncIterator]:
+    """
+    Data flow source that yields items from an asyncio.Queue.
+
+    This function returns an asynchronous iterator that consumes items from an asyncio.Queue.  The iteration continues
+    until an `EndOfStreamMarker` is encountered in the queue, signaling the end of iteration.
+
+    Parameters
+    ----------
+    queue : AwaitableOrObj[asyncio.Queue[T]], optional
+        An instance of asyncio.Queue from which the items will be consumed. This can be an instance of the queue
+        or an Awaitable that returns the queue, which can be useful if the queue isn't yet created.  This parameter is
+        optional.  If not provided, the AsyncIterator will be a :func:`~voice_stream.QueueAsyncIterator` which allows
+        items to be added to the queue via the `put` method.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator over the items in the queue.
+
+    Examples
+    --------
+    >>> queue = asyncio.Queue()
+    >>> queue.put(1)
+    >>> queue.put(2)
+    >>> queue.put(EndOfStreamMarker)
+    >>> pipe = queue_source()
+    >>> done = await array_sink(pipe)
+    >>> assert done == [1,2]
+
+    Notes
+    -----
+    - The function expects that the queue will be closed by putting `EndOfStreamMarker` into it.
+    - If an Awaitable[Queue] is passed, this function will return immediately and the queue will be awaited when the iterator is started.
+    """
     if queue:
 
         async def gen():
-            resolved_queue = await resolve_obj_or_future(queue)
+            resolved_queue = await resolve_awaitable_or_obj(queue)
             while True:
                 try:
                     item = await resolved_queue.get()
-                    if item is None:
+                    if item == EndOfStreamMarker:
                         break
                 except asyncio.CancelledError:
                     # logger.debug("Queue iterator cancelled.")
@@ -110,7 +308,7 @@ def queue_source(queue: FutureOrObj[asyncio.Queue[T]] = None) -> AsyncIterator[T
 
 async def queue_sink(
     async_iter: AsyncIterator[T],
-    queue: Optional[FutureOrObj[Union[QueueWithException, asyncio.Queue]]] = None,
+    queue: Optional[AwaitableOrObj[asyncio.Queue]] = None,
 ) -> asyncio.Queue:
     """Writes each element of the async_iter to a queue"""
     resolved_queue = None
@@ -119,7 +317,7 @@ async def queue_sink(
             async for message in owned_aiter:
                 if resolved_queue is None:
                     if queue:
-                        resolved_queue = await resolve_obj_or_future(queue)
+                        resolved_queue = await resolve_awaitable_or_obj(queue)
                     else:
                         resolved_queue = asyncio.Queue()
                 await resolved_queue.put(message)
@@ -129,7 +327,7 @@ async def queue_sink(
         else:
             raise e
     if resolved_queue:
-        await resolved_queue.put(None)  # signal completion
+        await resolved_queue.put(EndOfStreamMarker)  # signal completion
     return resolved_queue
 
 
@@ -142,7 +340,7 @@ async def text_file_source(filename: str) -> AsyncIterator[str]:
 
 
 async def text_file_sink(
-    async_iter: AsyncIterator[Any], filename: FutureOrObj[str]
+    async_iter: AsyncIterator[Any], filename: AwaitableOrObj[str]
 ) -> None:
     """Write each element of the async_iter to a file as a line"""
     return await _file_sink(async_iter, filename, "wt", lambda x: f"{x}\n")
@@ -161,7 +359,7 @@ async def binary_file_source(
 
 
 async def binary_file_sink(
-    async_iter: AsyncIterator[bytes], filename: FutureOrObj[str]
+    async_iter: AsyncIterator[bytes], filename: AwaitableOrObj[str]
 ) -> None:
     """Append each block of bytes from async_iter to the file"""
     return await _file_sink(async_iter, filename, "wb", lambda x: x)
@@ -169,7 +367,7 @@ async def binary_file_sink(
 
 async def _file_sink(
     async_iter: AsyncIterator[T],
-    filename: FutureOrObj[str],
+    filename: AwaitableOrObj[str],
     mode: str,
     prep_func: Callable[[T], Any],
 ) -> None:
@@ -179,7 +377,7 @@ async def _file_sink(
             async for block in owned_aiter:
                 # We wait to resolve the filename until we have a message to write
                 if f is None:
-                    filename = await resolve_obj_or_future(filename)
+                    filename = await resolve_awaitable_or_obj(filename)
                     f = await aiofiles.open(filename, mode)
                 await f.write(prep_func(block))
     finally:
@@ -373,12 +571,12 @@ async def concat_step(*async_iters: List[AsyncIterator[T]]) -> AsyncIterator[T]:
 
 
 async def chunk_bytes_step(
-    async_iter: AsyncIterator[bytes], chunk_size: FutureOrObj[int]
+    async_iter: AsyncIterator[bytes], chunk_size: AwaitableOrObj[int]
 ) -> AsyncIterator[bytes]:
     """Breaks byte buffers into chunks with a maximum size."""
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
-            resolved_chunk_size = await resolve_obj_or_future(chunk_size)
+            resolved_chunk_size = await resolve_awaitable_or_obj(chunk_size)
             for i in range(0, len(item), resolved_chunk_size):
                 data = item[i : i + resolved_chunk_size]
                 # logger.debug(f"Chunked {len(data)} bytes")
@@ -386,14 +584,14 @@ async def chunk_bytes_step(
 
 
 async def min_size_bytes_step(
-    async_iter: AsyncIterator[bytes], min_size: FutureOrObj[int]
+    async_iter: AsyncIterator[bytes], min_size: AwaitableOrObj[int]
 ) -> AsyncIterator[bytes]:
     """Ensures byte streams have a least a minimum size."""
     buffer = b""
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
             combined = buffer + item
-            if len(combined) >= await resolve_obj_or_future(min_size):
+            if len(combined) >= await resolve_awaitable_or_obj(min_size):
                 yield combined
                 buffer = b""
             else:
@@ -405,6 +603,7 @@ async def min_size_bytes_step(
 async def merge_step(*async_iters: list[AsyncIterator[T]]) -> AsyncIterator[T]:
     """Merges multiple iterators into one.  Differs from concat in that it takes from both iterators at the same time.
     An exception in any iterators cancels all."""
+    # TODO Implement with backpressure.
     queue = QueueWithException()
     tasks = [asyncio.create_task(queue.enqueue_iterator(it)) for it in async_iters]
 
@@ -412,7 +611,7 @@ async def merge_step(*async_iters: list[AsyncIterator[T]]) -> AsyncIterator[T]:
         completed = 0
         while completed < len(async_iters):
             item = await queue.get()
-            if item is None:
+            if item == EndOfStreamMarker:
                 completed += 1
             else:
                 yield item
@@ -474,12 +673,12 @@ def partition_step(
             # logger.debug(f"Exception while queueing")
             true_queue.set_exception(e)
             false_queue.set_exception(e)
-        await true_queue.put(None)  # Signal end of iteration
-        await false_queue.put(None)
+        await true_queue.put(EndOfStreamMarker)  # Signal end of iteration
+        await false_queue.put(EndOfStreamMarker)
 
     distribution_task = asyncio.create_task(distribute())
-    true_iterator = _make_queue_iterator(true_queue)
-    false_iterator = _make_queue_iterator(false_queue)
+    true_iterator = queue_source(true_queue)
+    false_iterator = queue_source(false_queue)
 
     return true_iterator, false_iterator
 
@@ -497,14 +696,14 @@ def fork_step(
 
     def with_backpressure():
         right_queue = asyncio.Queue()
-        right_iterator = _make_queue_iterator(right_queue)
+        right_iterator = queue_source(right_queue)
 
         async def consume_and_queue() -> AsyncIterator[T]:
             async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
                 async for item in owned_aiter:
                     await right_queue.put(item)
                     yield item
-            await right_queue.put(None)
+            await right_queue.put(EndOfStreamMarker)
 
         left_iterator = consume_and_queue()
         return left_iterator, right_iterator
@@ -522,12 +721,12 @@ def fork_step(
             except Exception as e:
                 left_queue.set_exception(e)
                 right_queue.set_exception(e)
-            await left_queue.put(None)  # Signal end of iteration
-            await right_queue.put(None)
+            await left_queue.put(EndOfStreamMarker)  # Signal end of iteration
+            await right_queue.put(EndOfStreamMarker)
 
         asyncio.create_task(distribute())
-        left_iterator = _make_queue_iterator(left_queue)
-        right_iterator = _make_queue_iterator(right_queue)
+        left_iterator = queue_source(left_queue)
+        right_iterator = queue_source(right_queue)
 
         return left_iterator, right_iterator
 
@@ -549,7 +748,7 @@ def buffer_step(
             # end of the audio stream.
             try:
                 item = await queue.get()
-                if item is None:
+                if item == EndOfStreamMarker:
                     # logger.info(f"None was on top of queue")
                     return
                 data = [item]
@@ -560,7 +759,7 @@ def buffer_step(
             while True:
                 try:
                     chunk = queue.get_nowait()
-                    if chunk is None:
+                    if chunk == EndOfStreamMarker:
                         # logger.info(f"Got None in nowait")
                         ongoing = False
                         break
@@ -580,20 +779,3 @@ def byte_buffer_step(async_iter: AsyncIterator[bytes]) -> AsyncIterator[bytes]:
 
 def str_buffer_step(async_iter: AsyncIterator[str]) -> AsyncIterator[str]:
     return buffer_step(async_iter, lambda x: "".join(x))
-
-
-async def _make_queue_iterator(
-    queue: Union[asyncio.Queue, QueueWithException]
-) -> AsyncIterator[T]:
-    """Returns an async iterator over objects in a queue.  The queue must be closed by putting None into it."""
-    while True:
-        try:
-            # logger.debug(f"Dequeuing {queue}")
-            item = await queue.get()
-            # logger.debug(f"Dequeued {item}")
-            if item is None:
-                break
-        except asyncio.CancelledError:
-            # logger.debug("Queue iterator cancelled.")
-            break
-        yield item

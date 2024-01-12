@@ -15,9 +15,9 @@ from voice_stream import (
     map_step,
 )
 from voice_stream.audio import wav_mulaw_file_sink, AudioFormat
-from voice_stream.basic_streams import single_source, array_sink
-from voice_stream.integrations.google_streams import google_text_to_speech_step
-from voice_stream.integrations.langchain_streams import langchain_step
+from voice_stream.core import single_source, array_sink
+from voice_stream.integrations.google import google_text_to_speech_step
+from voice_stream.integrations.langchain import langchain_step
 
 logger = logging.getLogger(__name__)
 

@@ -1,16 +1,21 @@
 import asyncio
+import logging
 from typing import AsyncIterator
 
 import asyncstdlib
 
+from voice_stream.types import EndOfStreamMarker
 
-class QueueWithException:
+logger = logging.getLogger(__name__)
+
+
+class QueueWithException(asyncio.Queue):
     """A queue that propagates exceptions.
     If a None is enqueued and the exception is set, then the exception is thrown on put.
     """
 
     def __init__(self):
-        self.queue = asyncio.Queue()
+        super().__init__()
         self.exception = None
 
     async def enqueue_iterator(self, async_iter: AsyncIterator):
@@ -19,29 +24,22 @@ class QueueWithException:
         try:
             async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
                 async for item in owned_aiter:
-                    await self.queue.put(item)
+                    await self.put(item)
         except Exception as e:
             self.exception = e
         # Signal end of iteration
-        await self.queue.put(None)
-
-    def qsize(self):
-        return self.queue.qsize()
-
-    async def put(self, item):
-        await self.queue.put(item)
+        await self.put(EndOfStreamMarker)
 
     async def get(self):
-        ret = await self.queue.get()
-        if ret is None and self.exception:
-            exception = self.exception
-            self.exception = None
-            raise exception
-        return ret
+        ret = await super().get()
+        return self._handle_get(ret)
 
     def get_nowait(self):
-        ret = self.queue.get_nowait()
-        if ret is None and self.exception:
+        ret = super().get_nowait()
+        return self._handle_get(ret)
+
+    def _handle_get(self, ret):
+        if ret == EndOfStreamMarker and self.exception:
             exception = self.exception
             self.exception = None
             raise exception

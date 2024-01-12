@@ -31,8 +31,8 @@ from google.cloud.texttospeech_v1 import (
     AudioEncoding,
 )
 
-from voice_stream.audio.audio_streams import remove_wav_header, AudioFormat
-from voice_stream.basic_streams import (
+from voice_stream.audio.audio import remove_wav_header, AudioFormat
+from voice_stream.core import (
     map_step,
     filter_step,
     array_source,
@@ -44,11 +44,11 @@ from voice_stream.basic_streams import (
     async_init_step,
 )
 from voice_stream.events import SpeechStart, SpeechEnd
-from voice_stream.integrations.google_setup import (
+from voice_stream.integrations.google_utils import (
     resolve_audio_decoding,
     GoogleDecodingConfig,
 )
-from voice_stream.text_to_speech_streams import AudioWithText
+from voice_stream.text_to_speech import AudioWithText
 
 # Can be one of the standard audio formats or a Google AudioConfig object
 GoogleAudioConfig = Union[AudioFormat, AudioConfig]

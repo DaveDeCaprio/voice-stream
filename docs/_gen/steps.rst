@@ -26,6 +26,7 @@ Steps
 .. autofunction:: voice_stream.ogg_page_separator_step
 .. autofunction:: voice_stream.partition_step
 .. autofunction:: voice_stream.raw_audio_rate_limit_step
+.. autofunction:: voice_stream.recover_exception_step
 .. autofunction:: voice_stream.speech_with_start_detection_step
 .. autofunction:: voice_stream.str_buffer_step
 .. autofunction:: voice_stream.substream_on_dict_key_step

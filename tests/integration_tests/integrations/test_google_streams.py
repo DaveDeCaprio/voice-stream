@@ -24,7 +24,7 @@ from voice_stream import (
     map_step,
 )
 from voice_stream.events import SpeechStart, SpeechEnd
-from voice_stream.integrations.google_streams import (
+from voice_stream.integrations.google import (
     google_speech_step,
     google_text_to_speech_step,
     google_speech_v1_step,

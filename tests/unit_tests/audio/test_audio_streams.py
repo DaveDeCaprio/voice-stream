@@ -4,7 +4,7 @@ import logging
 import pytest
 
 from voice_stream.audio import AudioFormatError
-from voice_stream.audio.audio_streams import (
+from voice_stream.audio.audio import (
     remove_wav_header,
 )
 from voice_stream import (

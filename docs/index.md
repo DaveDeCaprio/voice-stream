@@ -15,7 +15,7 @@ hide-toc: true
 getting_started/index
 concepts/index
 cookbook/index
-reference
+reference/index
 ```
 
 ```{toctree}

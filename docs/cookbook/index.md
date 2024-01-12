@@ -3,7 +3,8 @@
 ```{toctree}
 :hidden:
 
-phone
 browser
+browser_client
+phone
 desktop
 ```

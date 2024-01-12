@@ -2,9 +2,9 @@ import asyncio
 
 import pytest
 
-from voice_stream.basic_streams import array_sink
+from voice_stream.core import array_sink
 from voice_stream.events import SpeechStart, SpeechEnd
-from voice_stream.speech_to_text_streams import filter_spurious_speech_start_events_step
+from voice_stream.speech_to_text import filter_spurious_speech_start_events_step
 
 
 @pytest.mark.asyncio

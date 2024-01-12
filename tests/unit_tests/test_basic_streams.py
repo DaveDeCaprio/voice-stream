@@ -27,6 +27,7 @@ from voice_stream import (
     filter_step,
     merge_as_dict_step,
 )
+from voice_stream.types import EndOfStreamMarker
 
 logger = logging.getLogger(__name__)
 
@@ -175,13 +176,13 @@ async def test_queues():
     await source.put(1)
     await source.put(2)
     await source.put(3)
-    await source.put(None)
+    await source.put(EndOfStreamMarker)
     pipe = queue_source(source)
     dest = await queue_sink(pipe)
     assert await dest.get() == 1
     assert await dest.get() == 2
     assert await dest.get() == 3
-    assert await dest.get() is None
+    assert await dest.get() == EndOfStreamMarker
     assert dest.empty()
 
 
@@ -191,7 +192,7 @@ async def test_queue_source_put():
     pipe = array_sink(source)
     await source.put(1)
     await source.put(2)
-    await source.put(None)
+    await source.put(EndOfStreamMarker)
     ret = await pipe
     assert ret == [1, 2]
 
@@ -200,7 +201,10 @@ async def test_queue_source_put():
 async def test_merge_step():
     pipe1 = array_source([1, 2])
     pipe2 = array_source([3, 4])
+    pipe1 = log_step(pipe1, "Pre-merge1")
+    pipe2 = log_step(pipe2, "Pre-merge2")
     pipe = merge_step(pipe1, pipe2)
+    pipe = log_step(pipe, "Merged")
     ret = await array_sink(pipe)
     # This ordering technically isn't guaranteed, but seems to work.  If it fails, just leave the second assert.
     assert ret == [1, 3, 2, 4]

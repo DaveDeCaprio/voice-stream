@@ -1,3 +1,4 @@
+"""Works with the PyPI SpeechRecognition package.  Currently unimplemented."""
 # # Works with the python speech_recognition package
 # import asyncio
 # from concurrent.futures import ThreadPoolExecutor

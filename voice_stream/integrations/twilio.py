@@ -9,8 +9,8 @@ from typing import AsyncIterator, Tuple, Optional
 import asyncstdlib
 from quart import websocket, current_app
 
-from voice_stream.basic_streams import (
-    FutureOrObj,
+from voice_stream.core import (
+    AwaitableOrObj,
     partition_step,
     map_step,
     map_str_to_json_step,
@@ -20,9 +20,9 @@ from voice_stream.basic_streams import (
     merge_step,
     queue_source,
 )
-from voice_stream.types import map_future, resolve_obj_or_future
+from voice_stream.types import map_future, resolve_awaitable_or_obj
 from voice_stream.events import BaseEvent, CallStarted, CallEnded
-from voice_stream.integrations.quart_streams import quart_websocket_source
+from voice_stream.integrations.quart import quart_websocket_source
 
 logger = logging.getLogger(__name__)
 
@@ -78,14 +78,14 @@ async def twilio_media_to_audio_bytes_step(
 
 
 async def audio_bytes_to_twilio_media_step(
-    async_iter: AsyncIterator[bytes], stream_sid: FutureOrObj[str]
+    async_iter: AsyncIterator[bytes], stream_sid: AwaitableOrObj[str]
 ) -> AsyncIterator[dict]:
     resolved_stream_sid = None
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for packet in owned_aiter:
             encoded_data = base64.b64encode(packet).decode("utf-8")
             if not resolved_stream_sid:
-                resolved_stream_sid = await resolve_obj_or_future(stream_sid)
+                resolved_stream_sid = await resolve_awaitable_or_obj(stream_sid)
             yield {
                 "event": "media",
                 "streamSid": resolved_stream_sid,

@@ -20,11 +20,17 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinxext.opengraph",
     "sphinx_copybutton",
+    "sphinx.ext.extlinks",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.napoleon",  # for google style docstrings
+]
+
+myst_enable_extensions = [
+    "attrs_inline",
 ]
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
-
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -34,10 +40,15 @@ html_static_path = ["_static"]
 html_logo = "logo.png"
 html_title = "VoiceStream"
 html_theme_options = {
-    "sidebar_hide_name": True,
     "navigation_with_keys": True,
 }
 
+# -- Links -------------------------------------------------
+extlinks = {
+    #'fastapi-sec': ('https://fastapi.tiangolo.com/%s', 'FastAPI '),
+}
+
+# -- Puts code on the path for API generation -------------------------------------------------
 import os
 import sys
 

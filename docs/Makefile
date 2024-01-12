@@ -21,3 +21,6 @@ prebuild:
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile prebuild
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+serve-docs:
+	sphinx-autobuild . ./_build/html

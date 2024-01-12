@@ -3,16 +3,34 @@ import importlib
 import inspect
 import logging
 from asyncio import Future
-from typing import TypeVar, Tuple, List, Optional, Union, Callable, AsyncIterator
+from typing import (
+    TypeVar,
+    Tuple,
+    List,
+    Optional,
+    Union,
+    Callable,
+    AsyncIterator,
+    Awaitable,
+)
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 Input = TypeVar("Input", contravariant=True)
 Output = TypeVar("Output", covariant=True)
-FutureOrObj = Union[T, asyncio.Future[T]]
+AwaitableOrObj = Union[T, Awaitable[T]]
 
 SourceConvertable = Optional[Union[Callable[[], T], T]]
+
+
+class _EndOfStreamType:
+    """This is a marker object used to indicate the end of a stream during iteration."""
+
+    pass
+
+
+EndOfStreamMarker = _EndOfStreamType()
 
 
 def to_source(x: SourceConvertable) -> AsyncIterator[T]:
@@ -21,12 +39,12 @@ def to_source(x: SourceConvertable) -> AsyncIterator[T]:
         return x()
     elif x is None:
         logger.info("Empty source")
-        from voice_stream.basic_streams import empty_source
+        from voice_stream.core import empty_source
 
         return empty_source()
     else:
         logger.info("Single source")
-        from voice_stream.basic_streams import single_source
+        from voice_stream.core import single_source
 
         return single_source(x)
 
@@ -83,7 +101,7 @@ def map_future(f: Future[T], func: Callable[[T], Output]) -> Future[Output]:
     return ret
 
 
-async def resolve_obj_or_future(obj: FutureOrObj[T]) -> T:
+async def resolve_awaitable_or_obj(obj: AwaitableOrObj[T]) -> T:
     """Returns the result of an object or a future"""
     if isinstance(obj, asyncio.Future):
         return await obj
