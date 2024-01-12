@@ -16,6 +16,7 @@ dist/
 
 # Doc build
 /docs/_build/
+/docs/_gen/
 
 # Defaults
 
