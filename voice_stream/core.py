@@ -604,7 +604,7 @@ def map_str_to_json_step(async_iter: AsyncIterator[str]) -> AsyncIterator[dict]:
 
 
 async def flatten_step(
-    async_iter: AsyncIterator[Iterable[T] | AsyncIterator[T]],
+    async_iter: AsyncIterator[Union[Iterable[T], AsyncIterator[T]]],
 ) -> AsyncIterator[T]:
     """
     Data flow step that flattens an iterator of iterators into a single iterator.
@@ -646,6 +646,39 @@ def async_init_step(
     f: Callable[[AsyncIterator[T]], Coroutine],
     num_outputs: int = 1,
 ) -> AsyncIterator[Output]:
+    """
+    Data flow step that asyncronously initializes a step.
+
+    This step takes an AsyncIterator and a lambda that takes the iterator and returns an Awaitable.  It eagerly pulls
+    the first item from the iterator and separately calls the lambda and awaits the result in a separate task.  This
+    is useful when you ahve a step that requires an async call to initialize (which we generally avoid).  It's also
+    useful when the initialization depends on a value produced from earlier in the data flow.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An input asynchronous iterator.
+    f : Callable[[AsyncIterator[T]], Coroutine]
+        A coroutine function that takes the input async iterator and returns another async iterator
+    num_outputs : int, optional
+        The number of output async iterators to expect from `f`. Defaults to 1.  Use this if the step you are
+        asynchronously initializing returns more than one iterator, such as a :class:`~voice_stream:fork_step`.
+        num_outputs can be 0 in the case where the asynchronous initialization is for a sink.
+
+    Returns
+    -------
+    AsyncIterator[Output] or Tuple[AsyncIterator[Output], ...]
+        if `num_outputs` is 1, then returns an AsyncIterator
+        otherwise, returns a tuple of AsyncIterators the same length as `num_outputs`
+
+    Examples
+    --------
+    # Copy a file, generating a name based on the first line of the file.
+    >>> pipe = text_file_source("example.txt")
+    >>> pipe, name = extract_value_step(pipe, lambda x: x)
+    >>> done = await async_init_step(pipe, lambda x: text_file_sink(x, resolve_awaitable_or_obj(name)), num_outputs=0)
+    """
+
     class AsyncInitInputIterator:
         """Wraps the input iterator and eagerly gets the first item.  This pulls data through the stream in case our
         async_init function is waiting on it."""
