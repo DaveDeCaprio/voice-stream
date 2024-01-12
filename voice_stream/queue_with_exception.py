@@ -25,6 +25,11 @@ class QueueWithException(asyncio.Queue):
     >>> queue.set_exception(RuntimeError("Test Error"))
     >>> await array_sink(queue)
     Caught exception: Test Error
+
+    Notes
+    -----
+    - If an exception is set, it maintains its place in the queue.  If there are existing items in the queue, those will
+      be returned in calls to `get()` until all items in the queue when `set_exception` was called have been exhausted.
     """
 
     def __init__(self):
@@ -74,7 +79,7 @@ class QueueWithException(asyncio.Queue):
 
         Parameters:
         -----------
-            async_iter : AsyncIterator
-                An asynchronous iterator whose items will be enqueued.
+            exception
+                The exception to be thrown when the appropriate item is removed from the queue.
         """
         self.exception = exception
