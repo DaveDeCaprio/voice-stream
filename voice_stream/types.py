@@ -31,6 +31,8 @@ class _EndOfStreamType:
 
 
 EndOfStreamMarker = _EndOfStreamType()
+"""Special marker object that indicates the end of a stream.
+"""
 
 
 def to_source(x: SourceConvertable) -> AsyncIterator[T]:

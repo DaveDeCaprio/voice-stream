@@ -242,14 +242,6 @@ class QueueAsyncIterator:
     to add items to this queue. The iterator retrieves items from the queue in the order
     they were added.
 
-    Methods
-    -------
-    put(self, item):
-        Asynchronously add an item to the queue.
-        Parameters:
-            item : any type
-                The item to be added to the queue.
-
     Examples
     --------
     >>> queue = queue_source() # With no input arguments, this returns a QueueAsyncIterator.
@@ -267,7 +259,13 @@ class QueueAsyncIterator:
         self.iter = queue_source(self.queue)
 
     async def put(self, item):
-        """Adds an item to the queue managed by this iterator."""
+        """Adds an item to the queue managed by this iterator.
+
+        Parameters
+        ----------
+        item : any type
+            The item to be added to the queue.
+        """
         return await self.queue.put(item)
 
     def __aiter__(self):
@@ -370,8 +368,8 @@ async def queue_sink(
 
     Notes
     --------
-    * If the Queue has a `set_exception` method, that will be called when an exception is thrown by the iterator.  The
-    :class:`~voice_stream:QueueWithException` has this method, and uses it to throw the exception on the next call to `queue.get`.
+    - If the Queue has a `set_exception` method, that will be called when an exception is thrown by the iterator.  The
+      :class:`~voice_stream:QueueWithException` has this method, and uses it to throw the exception on the next call to `queue.get`.
     """
     resolved_queue = None
     try:
@@ -547,7 +545,7 @@ async def binary_file_sink(
 
     Notes
     -----
-    *  If an awaitable is passed, it is not waited on until the first item has been retrieved from the iterator.
+    - If an awaitable is passed, it is not waited on until the first item has been retrieved from the iterator.
     """
     return await _file_sink(async_iter, filename, "wb", lambda x: x)
 
@@ -604,7 +602,30 @@ def map_str_to_json_step(async_iter: AsyncIterator[str]) -> AsyncIterator[dict]:
 
 
 async def flatten_step(async_iter: AsyncIterator[Iterable[T]]) -> AsyncIterator[T]:
-    """Takes an async iterator where each item is iterable and iterates over it."""
+    """
+    Data flow step that flattens an iterator of iterators into a sinle iterator.
+
+    This function takes an asynchronous iterator where each item is itself an iterable (like a list or tuple)
+    and flattens it. This means it iterates over each element of these iterables in order, yielding them
+    individually. It's useful for converting a stream of iterables into a flat stream of elements.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[Iterable[T]]
+        An asynchronous iterator where each item is an iterable of elements.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator yielding individual elements from each iterable in the input async iterator.
+
+    Examples
+    --------
+    >>> pipe = array_source([[1,2], [3,4]])
+    >>> pipe = flatten_step(pipe)
+    >>> done = await array_sink(pipe)
+    >>> assert done == [1, 2, 3, 4]
+    """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
             for subitem in item:

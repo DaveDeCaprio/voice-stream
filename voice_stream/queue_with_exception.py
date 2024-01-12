@@ -17,33 +17,6 @@ class QueueWithException(asyncio.Queue):
     is set in the queue via `set_exception()`, it is propagated to the consumers either when they call `get()` or
     `get_nowait()`.
 
-    Methods
-    -------
-    enqueue_iterator(self, async_iter: AsyncIterator):
-        Enqueues items from an asynchronous iterator to the queue.
-        Parameters:
-            async_iter : AsyncIterator
-                An asynchronous iterator whose items will be enqueued.
-
-    get(self):
-        Asynchronously gets an item from the queue, propagating any exception if present.
-
-    get_nowait(self):
-        Gets an item from the queue without blocking, propagating any exception if present.
-
-    set_exception(self, exception: Exception):
-        Sets an exception to be propagated to consumers.
-        Parameters:
-            exception : Exception
-                The exception to be propagated.
-
-    Raises
-    ------
-    ValueError
-        If the provided async_iter is not an AsyncIterator.
-    Exception
-        The stored exception, if any, when `get` or `get_nowait` is called.
-
     Examples
     --------
     >>> queue = queue_source()
@@ -59,6 +32,14 @@ class QueueWithException(asyncio.Queue):
         self.exception = None
 
     async def enqueue_iterator(self, async_iter: AsyncIterator):
+        """Enqueues items from an asynchronous iterator to the queue.
+
+        Parameters:
+        -----------
+            async_iter : AsyncIterator
+                An asynchronous iterator whose items will be enqueued.
+
+        """
         if not hasattr(async_iter, "__aiter__"):
             raise ValueError(f"Object {async_iter} is not an async iterator")
         try:
@@ -86,4 +67,14 @@ class QueueWithException(asyncio.Queue):
         return ret
 
     def set_exception(self, exception: Exception):
+        """Sets an exception to be propagated to consumers.
+
+        When an exception is set, the EndOfStreamMarker is enqueued and when that marker is removed from the queue,
+        the exception will be raised.
+
+        Parameters:
+        -----------
+            async_iter : AsyncIterator
+                An asynchronous iterator whose items will be enqueued.
+        """
         self.exception = exception
