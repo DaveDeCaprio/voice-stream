@@ -7,6 +7,7 @@ from typing import (
     Optional,
     List,
     Union,
+    Any,
 )
 
 from voice_stream._substream_iters import SwitchableIterator
@@ -24,14 +25,46 @@ from voice_stream.types import (
     from_tuple,
     SourceConvertable,
     EndOfStreamMarker,
+    OptionalMultipleOutputs,
 )
 
 logger = logging.getLogger(__name__)
 
 
 async def substream_on_dict_key_step(
-    async_iter: AsyncIterator[dict], key: str, substream_func
+    async_iter: AsyncIterator[dict],
+    key: str,
+    substream_func: Callable[[AsyncIterator[Any]], AsyncIterator[Any]],
 ) -> AsyncIterator[dict]:
+    """
+    Data flow step that updates a value in a dictionary with the result of a substream.
+
+    This step takes in a dictionary and produces a new dictionary that has one key modified.  The modified value comes
+    from running a substream on the existing value.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[dict]
+        An asynchronous iterator that yields dictionaries.
+    key : str
+        The key in the dictionary on which to perform the substreaming.
+    substream_func : callable
+        A function that takes an AsyncIterator and returns a stream based off that iterator.
+
+    Returns
+    -------
+    AsyncIterator[dict]
+        An asynchronous iterator that yields the modified dictionaries.
+
+    Example
+    -------
+    >>> def substream(async_iter):
+    ...     return map_step(async_iter, lambda x: x+2)
+    >>> stream = array_source([{'a', 1, 'b':2}])
+    >>> stream = substream_on_dict_key_step(stream, "b", substream)
+    >>> out = await array_sink(stream)
+    >>> assert out == [{'a', 1, 'b':4}]
+    """
     current_dict = None
 
     async def input_gen():
@@ -47,8 +80,41 @@ async def substream_on_dict_key_step(
         yield out
 
 
-async def substream_step(async_iter: AsyncIterator[T], substream_func):
-    """For each item in the input iterator, creates a substream and feeds the item into it."""
+async def substream_step(
+    async_iter: AsyncIterator[T],
+    substream_func: Callable[[AsyncIterator[T]], AsyncIterator[Output]],
+) -> AsyncIterator[Output]:
+    """
+    Data flow step that runs a new stream on each item.
+
+    A substream is useful when you want to group steps together for error handling or flow control.  This step calls the
+    substream_func to create a new substream for each item from the source iterator.  The output of this step is the
+    output of the substreams.  Each instance of the substream only gets one input value.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An asynchronous iterator.
+    substream_func : str
+        A function that takes an AsyncIterator and creates a stream off of it.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator over the values produced by the substreams.
+
+    Returns
+    ----------
+    >>> instance_count = 0
+    >>> def substream(async_iter):
+    ...     nonlocal instance_count
+    ...     instance_count += 1
+    ...     return map_step(async_iter, lambda x: x+instance_count)
+    >>> stream = array_source([1,1,1])
+    >>> stream = substream(stream, substream)
+    >>> out = await array_sink(stream)
+    >>> assert out == [2, 3, 4]
+    """
     async for item in async_iter:
         stream = single_source(item)
         stream = substream_func(stream)
@@ -61,10 +127,40 @@ def cancelable_substream_step(
     cancel_iter: AsyncIterator[T],
     substream_func: Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
     cancel_messages: Optional[List[SourceConvertable]] = None,
-):
-    """Creates a new substream for each input to async_iter.  If any item comes in on cancel_iter, it immediately stops
-    the processing of the current substream, and optionally sends cancel_messages.
-    Returns as many AsyncIterators as are returned by the substream func.
+) -> OptionalMultipleOutputs:
+    """
+    Data flow step that runs a substream for each input, but takes a second iterator which causes the current substream to cancel.
+
+    Calls the `substream_func` to create a new substream for each item from the source iterator.  If any item is produced
+    from the `cancel_iter` during the processing of this substream, the substream is immediately stopped.  When a stop occurs,
+     `cancel_messages` are optionally sent down each stream.
+
+    Parameters
+    ----------
+    async_iter
+        The input AsyncIterator which we want to create substreams for.
+
+    cancel_iter
+        The cancel stream.  If an item appears on this iterator, the processing of the current substream is immediately stopped.
+
+    substream_func
+        The function used to generate AsyncIterators for each substream.
+
+    cancel_messages
+        An optional list of items to produce in the stream when a substream is cancelled.  If present, this must be a list
+        which has the same length as the number of outputs returns by `substream_func`.  Each element will determine how cancels
+        our signaled down that particular data stream.  If an AsyncIterator is passed, that iterator will be put into the stream.
+        If any other object is passed, that signal object will be sent.  If None is passed, then nothing will be sent down the stream.
+
+    Returns
+    -------
+     OptionalMultipleOutputs
+        Either a single AsyncIterator or a tuple of multiple AsyncIterators.  The length is determined by the number of
+        iterators returns from the substream_func.
+
+    Notes
+    -----
+    - If you want to explicitly send `None` when a cancel occurs, use a :func:`~voice_stream:none_source`.
     """
 
     substream_completed = asyncio.Event()
@@ -139,9 +235,33 @@ def interruptable_substream_step(
         Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
     ],
     cancel_messages: Optional[List[SourceConvertable]] = None,
-):
-    """For each input, creates a new substream and runs it.
-    If a new item comes in, the old item is immediately cancelled and a new one is created.
+) -> OptionalMultipleOutputs:
+    """
+    Data flow step that creates a substream which will get interrupted if a new value comes in.
+
+    For each input, creates a new substream and runs it.  If a new input is available before the substream completes,
+    this cancels the existing substream and starts a new one.  This is similar to :func:`~voice_stream.cancelable_substream_step`
+    except that it uses the same iterator for input values and to trigger cancellation.
+
+    Parameters
+    ----------
+    async_iter
+        The input AsyncIterator which we want to create substreams for.
+
+    substream_func
+        The function used to generate AsyncIterators for each substream.
+
+    cancel_messages
+        An optional list of items to produce in the stream when a substream is cancelled.  If present, this must be a list
+        which has the same length as the number of outputs returns by `substream_func`.  Each element will determine how cancels
+        our signaled down that particular data stream.  If an AsyncIterator is passed, that iterator will be put into the stream.
+        If any other object is passed, that signal object will be sent.  If None is passed, then nothing will be sent down the stream.
+
+    Returns
+    -------
+     OptionalMultipleOutputs
+        Either a single AsyncIterator or a tuple of multiple AsyncIterators.  The length is determined by the number of
+        iterators returns from the substream_func.
     """
 
     completed_outputs = 0
@@ -191,6 +311,11 @@ def interruptable_substream_step(
 def _create_cancel_messages(
     outputs: List[AsyncIterator], cancel_messages: Optional[List[SourceConvertable]]
 ):
+    """
+    The cancel_messages list must have the same length as the outputs list, indicating which output to cancel. If cancel_messages is not provided, it defaults to None.
+
+    The output cancel messages are converted to the appropriate type using the to_source() function.
+    """
     if cancel_messages and len(cancel_messages) != len(outputs):
         raise ValueError(
             f"cancel_messages must be the same length as the number of outputs for the substream.  Got {len(cancel_messages)} cancel messages and {len(outputs)} substream outputs."
@@ -202,6 +327,9 @@ def _create_cancel_messages(
 def _switch_outputs(
     switchable_iters: List[SwitchableIterator], new_outputs: List[AsyncIterator]
 ):
+    """
+    Switch the outputs of `switchable_iters` with the provided `new_outputs`.
+    """
     assert len(new_outputs) == len(switchable_iters)
     for switchable_iter, new_output in zip(switchable_iters, new_outputs):
         switchable_iter.switch(new_output)

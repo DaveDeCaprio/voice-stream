@@ -62,6 +62,7 @@ with open("_gen/sources.rst", "w") as sources:
 from voice_stream import audio
 
 write_submodule("voice_stream", "audio", all_names=True)
+write_submodule("voice_stream", "events", all_names=True)
 
 # Now do integrations
 from voice_stream import integrations

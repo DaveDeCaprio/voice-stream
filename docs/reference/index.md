@@ -10,6 +10,7 @@ Here is the API Reference
 ../_gen/sinks
 ../_gen/steps
 ../_gen/audio
+../_gen/events
 ../_gen/helpers
 ../_gen/integrations/index
 ```

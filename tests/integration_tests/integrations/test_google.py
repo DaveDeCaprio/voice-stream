@@ -103,8 +103,8 @@ async def test_google_speech_with_events():
     logger.info(events)
     assert out == ["testing 1 2 3 testing 1 2 3"]
     assert events == [
-        SpeechStart(1.29),
-        SpeechEnd(4.5),
+        SpeechStart(time_since_start=1.29),
+        SpeechEnd(time_since_start=4.5),
     ]
 
 
@@ -142,8 +142,8 @@ async def test_google_speech_v1_with_events():
     logger.info(events)
     assert out == ["Testing 1 2 3 testing 1 2 3."]
     assert events == [
-        SpeechStart(1.38),
-        SpeechEnd(4.46),
+        SpeechStart(time_since_start=1.38),
+        SpeechEnd(time_since_start=4.46),
     ]
 
 

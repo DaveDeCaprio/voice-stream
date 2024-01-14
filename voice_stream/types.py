@@ -23,6 +23,8 @@ AwaitableOrObj = Union[T, Awaitable[T]]
 
 SourceConvertable = Optional[Union[Callable[[], T], T]]
 
+OptionalMultipleOutputs = Union[AsyncIterator[T], Tuple]
+
 
 class _EndOfStreamType:
     """This is a marker object used to indicate the end of a stream during iteration."""
@@ -36,7 +38,15 @@ EndOfStreamMarker = _EndOfStreamType()
 
 
 def to_source(x: SourceConvertable) -> AsyncIterator[T]:
-    """Creates a source from a callable or value."""
+    """Creates a source from a callable or value.
+
+    Tries to turn the input value into a VoiceStream source.
+    - If it is a callable, assumes that is a callable that returns an AsyncIterator
+    - If it is an object, return a single_source containing the object.
+    - If it is None, return an empty_source.
+
+    To create a source that explicitly yields `None`, pass lambda x: none_source()
+    """
     if callable(x):
         return x()
     elif x is None:

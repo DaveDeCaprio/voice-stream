@@ -31,7 +31,26 @@ logger = logging.getLogger(__name__)
 async def wav_mulaw_file_source(
     filename: str, chunk_size: int = 4096
 ) -> AsyncIterator[bytes]:
-    """Reads a wav file and returns a stream of audio bytes"""
+    """
+    Data flow source that reads audio bytes from a wav file.
+
+    Parameters
+    ----------
+    filename : str
+        Name of the audio file
+    chunk_size : int
+        Number of bytes to read at one time from the file.  Passing 0 indicates the whole file should be read at once.
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        A stream of audio bytes.
+
+
+    Notes
+    -------
+    - The WAV header will be removed, so the data being passed will only include audio samples.
+    """
     f = AsyncMuLawStreamReader(filename, chunk_size=chunk_size)
     try:
         await f.open()
@@ -46,9 +65,22 @@ async def wav_mulaw_file_source(
 
 
 async def wav_mulaw_file_sink(
-    async_iter: AsyncIterator[bytes], filename: Union[str, asyncio.Future[str]]
+    async_iter: AsyncIterator[bytes], filename: AwaitableOrObj[str]
 ) -> None:
-    """Writes a stream of audio bytes to a wav file"""
+    """
+    Data flow sink that writes telephone audio (8Khz mu-law encoded audio) to a WAV file.
+
+    Parameters
+    ----------
+    async_iter : str
+        A stream containing the audio data to write.
+    filename : str
+        Name of the audio file.  Can be an `Awaitable[str]` if the filename isn't known at creation time (for example if it is generated based on data in the stream).
+
+    Notes
+    -------
+    - Assumes only audio data is passed.  A WAV header will be placed before the audio to properly format the file.
+    """
     f = None
     try:
         async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
@@ -71,7 +103,29 @@ async def wav_mulaw_file_sink(
 async def mp3_chunk_step(
     async_iter: AsyncIterator[bytes], chunk_size: AwaitableOrObj[int]
 ) -> AsyncIterator[bytes]:
-    """Takes in MP3 data and splits it on MP3 frame boundaries, making chunks as large as possible, but not larger than max_size, unless an individual frame is larger than max_size."""
+    """
+    Data flow step that splits incoming MP3 data on MP3 frame boundaries.
+
+    Takes incoming audio data and splits it into smaller chunks based on MP3 frame boundaries.  Attempts to keep
+    outgoing bytes smaller than `chunk_size` but may be larger if an individual frame can't fit into a chunk.
+
+    Parameters
+    ----------
+    async_iter :
+        The MP3 data to be split into chunks
+
+    chunk_size : int
+        The maximum allowable chunk size.
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        The incoming data split into smaller chunks which are all complete MP3 frames.
+
+    Notes
+    -----
+    - If an individual frame is larger than the chunk_size, it will not be split and the chunk can exceed chunk_size.
+    """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for data in owned_aiter:
             resolved_chunk_size = await resolve_awaitable_or_obj(chunk_size)
@@ -87,8 +141,26 @@ async def mp3_chunk_step(
 async def ogg_page_separator_step(
     async_iter: AsyncIterator[bytes],
 ) -> AsyncIterator[bytes]:
-    """Takes in a stream of bytes from an OGG media file and outputs bytes ensuring that each output is a complete page.
-    Checks if the last page in each chunk sent is a full page, if so, it sends it."""
+    """
+    Data flow step that splits incoming OGG data into distinct pages.
+
+    Takes in a stream of bytes from an OGG media file and outputs bytes ensuring that each output is a complete page.
+    Checks if the last page in each chunk sent is a full page, if so, it sends it.
+
+    Parameters
+    ----------
+    async_iter
+        Bytes from an OGG media file.
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        Bytes objects, each representing a full OGG page.
+
+    Notes
+    -----
+    - If the data passed in contains a partial page at the end, that page data will be buffered until the next input.
+    """
     buffer = b""
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for data in owned_aiter:
@@ -110,10 +182,27 @@ async def ogg_page_separator_step(
 async def ogg_concatenator_step(
     async_iter: AsyncIterator[bytes],
 ) -> AsyncIterator[bytes]:
-    """With files in OGG format, you can't concatenate the bytes.  This performs the necessary operations to concatenate streams.
-    This step assumes data is coming in chunked into full OGG pages.  If it is not, put an ogg_page_separator_step before.
+    """
+    Data flow step that concatenates multiple OGG streams into one.
 
-    This could be done more efficiently by using numpy to modify the buffer in place."""
+    With files in OGG format, you can't concatenate two different streams simply by concatenating the bytes.
+    This step performs the necessary operations to concatenate streams.  It assumes data is coming in chunked into
+    full OGG pages (the way :func:`~voice_stream.audio.ogg_page_separator_step` outputs it).
+
+    Parameters
+    ----------
+    async_iter
+        OGG pages as bytes objects
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        OGG pages, updated so that they form a single consistent stream.
+
+    Notes
+    -----
+    - This could be done more efficiently by using numpy to modify the buffer in place.
+    """
     sequence_offset = 0
     granule_offset = 0
     header = None
@@ -169,7 +258,19 @@ async def ogg_concatenator_step(
 
 
 def remove_wav_header(wav_bytes: bytes) -> bytes:
-    """Removes the wav header from a wav file, regardless of the format."""
+    """
+    Removes the wav header from a wav file, regardless of the format.
+
+    Parameters
+    ----------
+    wav_bytes
+        The beginning of a WAV file, including the header.
+
+    Returns
+    -------
+    bytes
+        The audio bytes from the file, without the header.
+    """
     # Check if it's a valid RIFF file
     if wav_bytes[:4] != b"RIFF" or wav_bytes[8:12] != b"WAVE":
         raise ValueError("Invalid WAV file")
@@ -194,6 +295,39 @@ def audio_rate_limit_step(
     audio_format: AwaitableOrObj[AudioFormat],
     buffer_seconds: float,
 ):
+    """
+    Data flow step that rate-limits the audio data coming in.
+
+    This step takes in audio data and produces the same audio data with delays introduced so that the downstream
+    iterator only gets `buffer_seconds` worth of audio at once.  Rate-limiting provides the ability to stop the audio
+    stream due to an interruption or other event.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator returning bytes of audio data.
+
+    audio_format : AwaitableOrObj[AudioFormat]
+       The format of the audio data.  Can be an Awaitable if the format isn't known when the step is created.
+
+    buffer_seconds : float
+        The amount of audio to pass to the downstream iterator.
+
+    Returns
+    -------
+    audio
+        The same audio bytes that came in, but rate-limited so that the downstream consumer only gets `buffer_seconds` worth of audio.
+
+    Raises
+    ------
+    AudioFormatError
+        If the audio format is not supported.
+
+    Notes
+    ------
+    - This function will break up long chunks of data in a format-specific way to perform the rate-limiting.
+    """
+
     def init(async_iter, af):
         if af == AudioFormat.WAV_MULAW_8KHZ:
             SAMPLE_RATE = 8000
@@ -275,15 +409,32 @@ async def raw_audio_rate_limit_step(
     bytes_per_second: AwaitableOrObj[int],
     buffer_seconds: AwaitableOrObj[float],
 ) -> AsyncIterator[bytes]:
-    """Limits the rate of sending audio bytes down the stream.  Note that this step always sends a full chunk.
-    buffer_seconds is the number of seconds of audio left before we send the next chunk.  Usually, you will want to put
-    a max size chunk step in before this.  buffer_seconds should be large enough to make sure the send executes.
+    """
+    Data flow step that performs rate-liming on chunks of audio data coming in.
+
+    This step rate limits input objects based on a given sample rate.  Generally, using :func:`~voice_stream.audio.audio_rate_limit_step`
+     is preferred to using this step, as that step handles the details of different audio formats.  This step does not
+     break up long chunks or handle differing formats.  It takes in bytes objects, determines the length of the audio based
+     on `bytes_per_second` and outputs the identical chunks it got with a delay.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        The input audio data
+    bytes_per_second: AwaitableOrObj[int],
+        The playback rate of the audio in bytes.  This is used to compute the duration of the audio based on the length of the byte array.
+    buffer_seconds : float
+        The number of seconds of audio left before we send the next chunk.
+
+    Note
+    ----
+    Usually, you will want to put a max size chunk step in before this.
     """
     last_send = time.perf_counter()
     queued_audio_seconds = 0
 
     def compute_remaining(now):
-        # Compute the amount of audio remaining to be played in seconds.
+        """Compute the amount of audio remaining to be played in seconds."""
         return max(0, queued_audio_seconds - (now - last_send))
 
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:

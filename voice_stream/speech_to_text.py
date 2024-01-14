@@ -16,6 +16,38 @@ SpeechStep = Callable[
 def speech_with_start_detection_step(
     async_iter: AsyncIterator[bytes], speech_step: SpeechStep
 ):
+    """
+    Data flow step to perform speech recognition on a stream of audio and produce a robust start detection event.
+
+    Takes a normal speech recognition step and filters the speech events to remove false :class:`~voice_stream.events.SpeechStart` events.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator that yields bytes of audio data.
+
+    speech_step : SpeechStep
+        A function that takes an async iterator as input and returns a tuple of a stream and speech events.
+
+    Returns
+    -------
+    tuple
+        A tuple of the audio stream and filtered speech start events.
+
+    Example
+    -------
+    >>> speech_step = google_speech_v1_step(
+    ...    stream,
+    ...    speech_async_client,
+    ...    audio_format=AudioFormat.WEBM_OPUS,
+    ...    include_events=True,
+    ... )
+    >>> stream = fastapi_websocket_bytes_source(websocket)
+    >>> stream, speech_events = speech_with_start_detection_step(stream, speech_step)
+    >>> stream = merge_step(stream, speech_events)
+    >>> await array_sink(stream)
+    [SpeechStart(time_since_start=1.2), SpeechEnd(time_since_start=2.5), "Hello, how are you?"]
+    """
     stream, speech_events = speech_step(async_iter)
     # speech_events = log_step(speech_events, "Speech event")
     speech_start = filter_spurious_speech_start_events_step(speech_events)
@@ -23,9 +55,37 @@ def speech_with_start_detection_step(
 
 
 def filter_spurious_speech_start_events_step(
-    async_iter: AsyncIterator[BaseEvent], threshold: float = 1.0
+    async_iter: AsyncIterator[BaseEvent], threshold_secs: float = 1.0
 ):
-    """Detects the start of speech and returns the audio that was detected."""
+    """
+    Data flow step the filters a stream of speech events to remove false positives.
+
+    This step filters speech events so that if a :class:`~voice_stream.events.SpeechStart` is quickly followed by a
+    :class:`~voice_stream.events.SpeechEnd`, it is considered spurious and ignored.  This is useful for avoiding false
+    detections which could create unnecessary interruptions.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[BaseEvent]
+        An asynchronous iterator that yields bytes of audio data.
+
+    threshold_secs : float
+        The number of seconds to wait for a SpeechEnd after a SpeechStart is received.
+
+    Returns
+    -------
+    AsyncIterator[BaseEvent]
+        A modified event stream that removes the spurious :class:`~voice_stream.events.SpeechStart` events.
+
+    Example
+    -------
+    >>> stream, speech_events = speech_step(async_iter)
+    >>> speech_events = filter_spurious_speech_start_events_step(speech_events)
+
+    Notes
+    -------
+    - Using this step does cause a delay in the movement of SpeechStart events down the stream.
+    """
 
     class WaitingIterator:
         def __init__(self):
@@ -66,7 +126,7 @@ def filter_spurious_speech_start_events_step(
                     if isinstance(item, SpeechStart):
                         # logger.debug("Received Speech Start.  Resetting timer")
                         end_time = datetime.datetime.now() + datetime.timedelta(
-                            seconds=threshold
+                            seconds=threshold_secs
                         )
                         start_event = item
                     elif isinstance(item, SpeechEnd):

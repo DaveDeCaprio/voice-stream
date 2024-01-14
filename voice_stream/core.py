@@ -1500,7 +1500,7 @@ def str_buffer_step(async_iter: AsyncIterator[str]) -> AsyncIterator[str]:
 
     Returns
     -------
-    AsyncIterator[bytes]
+    AsyncIterator[str]
         An asynchronous iterator yielding concatenated text.
 
     Examples

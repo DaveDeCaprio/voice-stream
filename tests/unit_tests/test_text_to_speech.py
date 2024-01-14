@@ -16,6 +16,7 @@ from voice_stream import (
     timed_text_rate_limit_step,
     AudioWithText,
     tts_rate_limit_step,
+    buffer_tts_text_step,
 )
 from voice_stream.audio import AudioFormat, wav_mulaw_file_source, wav_mulaw_file_sink
 from voice_stream.events import TimedText
@@ -32,7 +33,10 @@ async def test_min_tokens_step():
 @pytest.mark.asyncio
 async def test_timed_text_rate_limit_step():
     stream = array_source(
-        [TimedText("Hello, my name is", 1.0), TimedText(" Dave", 0.5)]
+        [
+            TimedText(text="Hello, my name is", duration_in_seconds=1.0),
+            TimedText(text=" Dave", duration_in_seconds=0.5),
+        ]
     )
     stream = timed_text_rate_limit_step(stream, 0.25)
     now = datetime.datetime.now()
@@ -133,3 +137,11 @@ async def test_rate_limit_mp3_with_text(tmp_path):
     # Check length of output file
     assert os.path.getsize(out_file) > 17500
     assert elapsed.total_seconds() > 1.0
+
+
+@pytest.mark.asyncio
+async def test_buffer_tts_text_step():
+    stream = array_source(["Hello", " world!", " How", " are", " you", " today", ""])
+    stream = buffer_tts_text_step(stream)
+    out = await array_sink(stream)
+    assert out == ["Hello world!", " How are you today"]
