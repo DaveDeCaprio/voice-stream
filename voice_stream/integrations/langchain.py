@@ -24,6 +24,8 @@ GenericStepFunc = Callable[[AsyncIterator[Any]], AsyncIterator[Any]]
 
 
 class LangchainVoiceFlow:
+    """Experimental.  Not sure we should be using this."""
+
     def __init__(
         self,
         text_input: AsyncIterator[str],
@@ -67,13 +69,44 @@ class LangchainVoiceFlow:
 
 
 async def langchain_step(
-    async_iter: AsyncIterator[str],
+    async_iter: AsyncIterator[Input],
     chain: Runnable[Input, Output],
     input_key: Optional[str] = None,
     config_key: Optional[str] = None,
     on_completion: SourceConvertable = None,
 ) -> AsyncIterator[Output]:
-    """Runs a chain for each text item sent in, streams back response tokens."""
+    """
+    Data flow step that passes each input item to a LangChain runnable and streams the output.
+
+    This step is used to call LLMs or run any other LangChain runnable.  It receives text
+    items, processes them through a specified 'chain', and yields the resulting output
+    tokens asynchronously.  If `input_key` is not specified, the input will be directly passed to the runnable.
+    If `input_key` is specified, then the items coming from the source iterator must be dictionaries, and the `input_key`
+    specifies which item should be passed as input to the runnable.  The `config_key` can also be used to pass configuration
+    to the Runnable.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[str]
+        An asynchronous iterator that provides input text items.
+    chain : Runnable[Input, Output]
+        A Langchain Runnable that processes each input item.
+    input_key : Optional[str], optional
+        If specified, the item from the incoming dictionary that should be used as the input to the Runnable.
+        If empty, then the incoming item will be passed directly.
+    config_key : Optional[str], optional
+        If specified, the item from the incoming dictionary that should be used as the config argument to the Runnable.
+        Can only be specified if input_key is specified.
+    on_completion : SourceConvertable, optional
+        An optional source to be converted and iterated upon completion of processing each text item.  Can be used to
+        signal the end of output if that isn't clear form the output of the chain itself.
+
+    Yields
+    ------
+    AsyncIterator[Output]
+        An asynchronous iterator yielding the output from the LangChain Runnable.
+
+    """
     # Note on cancelling - https://github.com/langchain-ai/langchain/issues/11959
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for text in owned_aiter:

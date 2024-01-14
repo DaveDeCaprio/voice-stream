@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from typing import AsyncIterator, Union
+from typing import AsyncIterator, Union, Tuple
 
 import asyncstdlib
 from google.api_core.exceptions import Aborted
@@ -27,6 +27,7 @@ from google.cloud.texttospeech_v1 import (
     AudioConfig,
     AudioEncoding,
 )
+from pydantic import BaseModel
 
 from voice_stream.audio.audio_ops import remove_wav_header, AudioFormat
 from voice_stream.core import (
@@ -40,9 +41,9 @@ from voice_stream.core import (
     partition_step,
     async_init_step,
 )
-from voice_stream.events import SpeechStart, SpeechEnd
+from voice_stream.events import SpeechStart, SpeechEnd, BaseEvent
 from voice_stream.integrations.google_utils import (
-    resolve_audio_decoding,
+    _resolve_audio_decoding,
     GoogleDecodingConfig,
 )
 from voice_stream.text_to_speech import AudioWithText
@@ -53,8 +54,7 @@ GoogleAudioConfig = Union[AudioFormat, AudioConfig]
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class TTSRequest:
+class TTSRequest(BaseModel):
     text: str
     voice: str
 
@@ -65,8 +65,35 @@ async def google_text_to_speech_step(
     voice_name: str = "en-US-Standard-H",
     audio_format: GoogleAudioConfig = AudioFormat.OGG_OPUS,
 ) -> AsyncIterator[AudioWithText]:
-    """Each text block that comes in is converted to audio using the desired voice and format.
-    Can take either strings in, or a TTSRequest, which allows you to specify the voice.
+    """
+    Data flow step that converts text to speech using Google's Text-to-Speech service.
+
+    This function takes in strings or TTSRequest objects and converts each into audio using the specified voice and
+    audio format. The function supports customization of the voice for each item if provided within a TTSRequest object.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[Union[str, TTSRequest]]
+        An asynchronous iterator over text blocks or TTSRequest objects.  Using TTSRequest objects allows the voice to be
+        customized for each block of text.
+    text_to_speech_async_client : TextToSpeechAsyncClient
+        An instance of TextToSpeechAsyncClient for interacting with the Google Text-to-Speech API.
+    voice_name : str, optional
+        Default voice name to be used for text-to-speech conversion. Default is "en-US-Standard-H".
+    audio_format : GoogleAudioConfig, optional
+        The audio format for the output speech. Default is AudioFormat.OGG_OPUS.
+
+    Yields
+    ------
+    AsyncIterator[AudioWithText]
+        An asynchronous iterator yielding AudioWithText objects, each containing
+        the audio output and the original text.
+
+    Notes
+    -----
+    - The function allows for dynamic voice selection if a TTSRequest object is provided,
+      which specifies the voice for a particular text block.
+    - Supports different audio encoding formats based on the GoogleAudioConfig.
     """
     audio_config = _resolve_google_audio_config(audio_format)
 
@@ -104,9 +131,51 @@ def google_speech_step(
     language_codes: Union[str, list[str]] = ["en-US", "es-US"],
     audio_format: GoogleDecodingConfig = None,
     include_events: bool = False,
-) -> AsyncIterator[str]:
-    """Converts a stream of audio bytes into a stream of text.
-    If include_events is True, a second stream will be returned containing speech events.
+) -> Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[BaseEvent]]]:
+    """
+    Data flow step for converting audio into text using Google Cloud Speech-to-Text V2 API.
+
+    This function processes an asynchronous stream of audio bytes, using Google Cloud
+    Speech-to-Text service to convert the audio into text. It supports additional
+    configuration such as specifying the model, language codes, and audio format.
+    If 'include_events' is set to True, it also returns a stream of speech recognition
+    events alongside the text (:class:`~voice_stream.events.SpeechStart` and :class:`~voice_stream.events.SpeechEnd`).
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator over audio data in bytes.
+    speech_async_client : SpeechAsyncClient
+        An instance of SpeechAsyncClient for interacting with the Google Cloud Speech-to-Text API.
+    project :
+        The Google Cloud project identifier.
+    location :
+        The location or region of the Google Cloud project.
+    recognizer :
+        The recognizer identifier within the Google Cloud project.  This must be a previously created recognizer.  See
+        :func:`~voice_stream.integrations.google_utils.create_recognizer` for details.
+    model : str, optional
+        The model to be used by the recognizer. Default is "latest_long".
+    language_codes : Union[str, list[str]], optional
+        The language code(s) for the recognizer. Can be a single string or a list of strings.
+        Default is ["en-US", "es-US"].
+    audio_format : GoogleDecodingConfig, optional
+        Optional configuration for audio decoding. Not required if the recognizer auto-detects the format.
+    include_events : bool, optional
+        If True, the function also returns a stream of speech recognition events. Default is False.
+
+    Returns
+    -------
+    Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[BaseEvent]]]
+        If `include_events` is False, returns an asynchronous iterator yielding recognized text from the audio stream.
+        If `include-events` is True, returns a tuple with 2 iterators.  The first yields the recognized text, and the
+        second contain speech events.
+
+    Notes
+    -----
+    - The function breaks the audio stream into chunks, sends them to the Speech-to-Text
+      API, and processes the responses to extract the transcript.
+    - Speech recognition events include information like word timings and confidences.
     """
     MAX_STREAM_SIZE = 25600
     stream = async_iter
@@ -170,8 +239,42 @@ def google_speech_v1_step(
     language_code: str = "en-US",
     include_events: bool = False,
 ) -> AsyncIterator[str]:
-    """Converts a stream of audio bytes into a stream of text.
-    If include_events is True, a second stream will be returned containing speech events.
+    """
+    Data flow step for converting audio into text using Google Cloud Speech-to-Text V1 API.
+
+    This function processes an asynchronous stream of audio bytes, using Google Cloud
+    Speech-to-Text V1 service to convert the audio into text. It supports additional
+    configuration such as specifying the model, language codes, and audio format.
+    If 'include_events' is set to True, it also returns a stream of speech recognition
+    events alongside the text (:class:`~voice_stream.events.SpeechStart` and :class:`~voice_stream.events.SpeechEnd`).
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator over audio data in bytes.
+    speech_async_client : SpeechAsyncClient
+        An instance of SpeechAsyncClientV1 for interacting with the Google Cloud Speech-to-Text API V1.
+    audio_format : AudioFormat
+        The audio format of the input data.  This is required in V1.  Use the V2 API for auto-detection of formats.
+    model : str, optional
+        The model to be used by the recognizer. Default is "latest_long".
+    language_code : str, optional
+        The language code(s) for the recognizer. Default is "en-US".
+    include_events : bool, optional
+        If True, the function also returns a stream of speech recognition events. Default is False.
+
+    Returns
+    -------
+    Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[BaseEvent]]]
+        If `include_events` is False, returns an asynchronous iterator yielding recognized text from the audio stream.
+        If `include-events` is True, returns a tuple with 2 iterators.  The first yields the recognized text, and the
+        second contain speech events.
+
+    Notes
+    -----
+    - The function breaks the audio stream into chunks, sends them to the Speech-to-Text
+      API, and processes the responses to extract the transcript.
+    - Speech recognition events include information like word timings and confidences.
     """
     MAX_STREAM_SIZE = 25600
     stream = async_iter
@@ -269,7 +372,7 @@ def _initial_recognition_config(
     recognizer_path = (
         f"projects/{project}/locations/{location}/recognizers/{recognizer}"
     )
-    auto_decoding, explicit_decoding = resolve_audio_decoding(audio_format)
+    auto_decoding, explicit_decoding = _resolve_audio_decoding(audio_format)
 
     # noinspection PyTypeChecker
     out = StreamingRecognizeRequest(

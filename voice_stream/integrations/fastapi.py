@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 async def fastapi_websocket_text_source(websocket: WebSocket) -> AsyncIterator[str]:
     """
-    Data flow sink for receiving text messages from a FastAPI WebSocket connection.
+    Data flow source for receiving text messages from a FastAPI WebSocket connection.
 
     This function facilitates the handling of incoming text messages from a client connected through
     a FastAPI WebSocket. It continuously listens for messages and yields them as they arrive. The
@@ -23,8 +23,8 @@ async def fastapi_websocket_text_source(websocket: WebSocket) -> AsyncIterator[s
         An instance of WebSocket from FastAPI. This is the WebSocket connection through which the
         function will receive text messages.
 
-    Yields
-    ------
+    Returns
+    -------
     AsyncIterator[str]
         An asynchronous iterator that yields incoming text messages as strings.
 
@@ -69,8 +69,8 @@ async def fastapi_websocket_bytes_source(websocket: WebSocket) -> AsyncIterator[
     websocket : WebSocket
         The FastAPI WebSocket connection from which to receive binary data.
 
-    Yields
-    ------
+    Returns
+    -------
     bytes
         Binary data received from the WebSocket.
 
@@ -120,9 +120,9 @@ async def fastapi_websocket_json_source(websocket: WebSocket) -> AsyncIterator[d
     websocket : WebSocket
         The WebSocket connection from which to receive JSON data.
 
-    Yields
-    ------
-    dict
+    Returns
+    -------
+    AsyncIterator[dict]
         JSON data received from the WebSocket, parsed into a Python dictionary.
 
     Examples
