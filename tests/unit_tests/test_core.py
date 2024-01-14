@@ -19,7 +19,7 @@ from voice_stream import (
     queue_source,
     queue_sink,
     merge_step,
-    exception_handler_step,
+    recover_exception_step,
     binary_file_source,
     binary_file_sink,
     async_init_step,
@@ -27,6 +27,7 @@ from voice_stream import (
     filter_step,
     merge_as_dict_step,
 )
+from voice_stream.core import buffer_step
 from voice_stream.types import EndOfStreamMarker
 
 logger = logging.getLogger(__name__)
@@ -44,56 +45,62 @@ async def test_partition():
 
 @pytest.mark.asyncio
 async def test_log_source():
-    pipe = array_source(range(4))
-    pipe = log_step(pipe, "test")
-    ret = await array_sink(pipe)
-    assert ret == [0, 1, 2, 3]
+    stream = array_source(range(4))
+    stream = log_step(stream, "test")
+    out = await array_sink(stream)
+    assert out == [0, 1, 2, 3]
 
 
 @pytest.mark.asyncio
 async def test_map_step():
-    pipe = array_source(range(4))
-    pipe = map_step(pipe, lambda x: x + 2)
-    ret = await array_sink(pipe)
-    assert ret == [2, 3, 4, 5]
+    stream = array_source(range(4))
+    stream = map_step(stream, lambda x: x + 2)
+    out = await array_sink(stream)
+    assert out == [2, 3, 4, 5]
 
 
 @pytest.mark.asyncio
 async def test_map_step_none():
-    pipe = array_source(range(4))
-    pipe = map_step(pipe, lambda x: (x + 2) if x % 2 == 0 else None, ignore_none=False)
-    ret = await array_sink(pipe)
-    assert ret == [2, None, 4, None]
+    stream = array_source(range(4))
+    stream = map_step(
+        stream, lambda x: (x + 2) if x % 2 == 0 else None, ignore_none=False
+    )
+    out = await array_sink(stream)
+    assert out == [2, None, 4, None]
 
 
 @pytest.mark.asyncio
 async def test_map_step_ignore():
-    pipe = array_source(range(4))
-    pipe = map_step(pipe, lambda x: (x + 2) if x % 2 == 0 else None, ignore_none=True)
-    ret = await array_sink(pipe)
-    assert ret == [2, 4]
+    stream = array_source(range(4))
+    stream = map_step(
+        stream, lambda x: (x + 2) if x % 2 == 0 else None, ignore_none=True
+    )
+    out = await array_sink(stream)
+    assert out == [2, 4]
 
 
 @pytest.mark.asyncio
 async def test_map_async_step():
-    pipe = array_source(range(4))
+    stream = array_source(range(4))
 
     async def add_two(x):
         await asyncio.sleep(0)
         return x + 2
 
-    pipe = map_step(pipe, add_two)
-    ret = await array_sink(pipe)
-    assert ret == [2, 3, 4, 5]
+    stream = map_step(stream, add_two)
+    out = await array_sink(stream)
+    assert out == [2, 3, 4, 5]
 
 
 @pytest.mark.asyncio
 async def test_materialize_value():
-    pipe = array_source(range(4))
-    pipe, f_value = extract_value_step(pipe, lambda x: x, condition=lambda x: x == 2)
-    ret = await array_sink(pipe)
+    stream = array_source(range(4))
+    stream, f_value = extract_value_step(
+        stream, lambda x: x, condition=lambda x: x == 2
+    )
+    out = await array_sink(stream)
     value = await f_value
-    assert ret == [0, 1, 2, 3]
+    assert out == [0, 1, 2, 3]
     assert value == 2
 
 
@@ -115,18 +122,18 @@ async def test_async_init_step_with_future():
         inc = await inc_f
         return map_step(async_iter, lambda x: x + inc)
 
-    pipe = array_source([2, 3, 4])
-    pipe, inc_f = extract_value_step(pipe, lambda x: x)
+    stream = array_source([2, 3, 4])
+    stream, inc_f = extract_value_step(stream, lambda x: x)
     # Increment each element by the value of the first element.
-    pipe = async_init_step(pipe, lambda x: increment_by_future(x, inc_f))
-    ret = await array_sink(pipe)
-    assert ret == [4, 5, 6]
+    stream = async_init_step(stream, lambda x: increment_by_future(x, inc_f))
+    out = await array_sink(stream)
+    assert out == [4, 5, 6]
 
 
 @pytest.mark.asyncio
-async def test_fork_step():
+async def test_fork_step_pull_from_all():
     source = array_source(range(2))
-    a, b = fork_step(source, backpressure=False)
+    a, b = fork_step(source, pull_from_all=True)
     a = await array_sink(a)
     b = await array_sink(b)
     assert a == [0, 1]
@@ -134,7 +141,7 @@ async def test_fork_step():
 
 
 @pytest.mark.asyncio
-async def test_fork_step_backpressure():
+async def test_fork_step():
     source = array_source(range(2))
     a, b = fork_step(source)
     a = await array_sink(a)
@@ -163,11 +170,11 @@ async def test_echo_binary_file(tmp_path):
 
 @pytest.mark.asyncio
 async def test_concat_step():
-    pipe1 = array_source([1, 2])
-    pipe2 = array_source([3, 4])
-    pipe = concat_step(pipe1, pipe2)
-    ret = await array_sink(pipe)
-    assert ret == [1, 2, 3, 4]
+    stream1 = array_source([1, 2])
+    stream2 = array_source([3, 4])
+    stream = concat_step(stream1, stream2)
+    out = await array_sink(stream)
+    assert out == [1, 2, 3, 4]
 
 
 @pytest.mark.asyncio
@@ -177,8 +184,8 @@ async def test_queues():
     await source.put(2)
     await source.put(3)
     await source.put(EndOfStreamMarker)
-    pipe = queue_source(source)
-    dest = await queue_sink(pipe)
+    stream = queue_source(source)
+    dest = await queue_sink(stream)
     assert await dest.get() == 1
     assert await dest.get() == 2
     assert await dest.get() == 3
@@ -189,41 +196,41 @@ async def test_queues():
 @pytest.mark.asyncio
 async def test_queue_source_put():
     source = queue_source()
-    pipe = array_sink(source)
+    stream = array_sink(source)
     await source.put(1)
     await source.put(2)
     await source.put(EndOfStreamMarker)
-    ret = await pipe
-    assert ret == [1, 2]
+    out = await stream
+    assert out == [1, 2]
 
 
 @pytest.mark.asyncio
 async def test_merge_step():
-    pipe1 = array_source([1, 2])
-    pipe2 = array_source([3, 4])
-    pipe1 = log_step(pipe1, "Pre-merge1")
-    pipe2 = log_step(pipe2, "Pre-merge2")
-    pipe = merge_step(pipe1, pipe2)
-    pipe = log_step(pipe, "Merged")
-    ret = await array_sink(pipe)
+    stream1 = array_source([1, 2])
+    stream2 = array_source([3, 4])
+    stream1 = log_step(stream1, "Pre-merge1")
+    stream2 = log_step(stream2, "Pre-merge2")
+    stream = merge_step(stream1, stream2)
+    stream = log_step(stream, "Merged")
+    out = await array_sink(stream)
     # This ordering technically isn't guaranteed, but seems to work.  If it fails, just leave the second assert.
-    assert ret == [1, 3, 2, 4]
-    assert sorted(ret) == [1, 2, 3, 4]
+    assert out == [1, 3, 2, 4]
+    assert sorted(out) == [1, 2, 3, 4]
 
 
 @pytest.mark.asyncio
 async def test_merge_as_dict_step():
-    pipe = array_source([1, 2, 3, 4, 5, 6])
-    pipe, evens = fork_step(pipe)
-    by_three, odds = fork_step(pipe)
+    stream = array_source([1, 2, 3, 4, 5, 6])
+    stream, evens = fork_step(stream)
+    by_three, odds = fork_step(stream)
     evens = filter_step(evens, lambda x: x % 2 == 0)
     odds = filter_step(odds, lambda x: x % 2 == 1)
     by_three = filter_step(by_three, lambda x: x % 3 == 0)
-    pipe = merge_as_dict_step(
+    stream = merge_as_dict_step(
         {"last_even": evens, "last_odd": odds, "last_by_three": by_three}
     )
-    ret = await array_sink(pipe)
-    assert ret == [
+    out = await array_sink(stream)
+    assert out == [
         {"last_even": 2, "last_odd": 1},
         {"last_even": 4, "last_odd": 3, "last_by_three": 3},
         {"last_even": 6, "last_odd": 5, "last_by_three": 6},
@@ -241,42 +248,58 @@ def _source_with_exception() -> AsyncIterator[int]:
 
 
 @pytest.mark.asyncio
-async def test_handle_exception_step_no_failure():
+async def test_recover_exception_step_no_failure():
     raised = None
 
     def set_raised(x):
         nonlocal raised
         raised = x
 
-    pipe = array_source([1, 2, 3])
-    pipe = exception_handler_step(pipe, KeyError, set_raised)
-    ret = await array_sink(pipe)
-    assert ret == [1, 2, 3]
+    stream = array_source([1, 2, 3])
+    stream = recover_exception_step(stream, KeyError, set_raised)
+    out = await array_sink(stream)
+    assert out == [1, 2, 3]
 
 
 @pytest.mark.asyncio
-async def test_handle_exception_step():
+async def test_recover_exception_step():
     raised = None
 
     def set_raised(x):
         nonlocal raised
         raised = x
 
-    pipe = _source_with_exception()
-    pipe = exception_handler_step(pipe, KeyError, set_raised)
-    ret = await array_sink(pipe)
+    stream = _source_with_exception()
+    stream = recover_exception_step(stream, KeyError, set_raised)
+    out = await array_sink(stream)
     assert raised.args[0] == "Test"
 
 
 @pytest.mark.asyncio
-async def test_handle_exception_step_different_type():
+async def test_recover_exception_step_different_type():
     raised = None
 
     def set_raised(x):
         nonlocal raised
         raised = x
 
-    pipe = _source_with_exception()
-    pipe = exception_handler_step(pipe, ValueError, set_raised)
+    stream = _source_with_exception()
+    stream = recover_exception_step(stream, ValueError, set_raised)
     with pytest.raises(KeyError):
-        await array_sink(pipe)
+        await array_sink(stream)
+
+
+@pytest.mark.asyncio
+async def test_buffer_step():
+    async def rate_limit_sink(ai):
+        out = []
+        async for item in ai:
+            await asyncio.sleep(0.1)
+            out.append(item)
+        return out
+
+    stream = array_source(["a", "b", "c", "d"])
+    stream = buffer_step(stream, lambda x: "".join(x))
+    stream = log_step(stream, "Test")
+    out = await rate_limit_sink(stream)
+    assert out == ["a", "bcd"]

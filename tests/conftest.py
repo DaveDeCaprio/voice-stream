@@ -1,7 +1,7 @@
+import atexit
 import json
 import logging.config
 import os
-import atexit
 from pathlib import Path
 
 from dotenv import load_dotenv

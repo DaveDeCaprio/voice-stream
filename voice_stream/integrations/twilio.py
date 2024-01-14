@@ -20,9 +20,9 @@ from voice_stream.core import (
     merge_step,
     queue_source,
 )
-from voice_stream.types import map_future, resolve_awaitable_or_obj
 from voice_stream.events import BaseEvent, CallStarted, CallEnded
 from voice_stream.integrations.quart import quart_websocket_source
+from voice_stream.types import map_future, resolve_awaitable_or_obj
 
 logger = logging.getLogger(__name__)
 
@@ -125,26 +125,28 @@ class TwilioInputFlow:
         Creates a basic flow to receive audio and call event data from Twilio.
         expose_all_messages - If true, all incoming twilio messages, including raw audio, will be set through the 'all_twilio_messages' iterator.  Otherwise this iterator will be empty.
         """
-        pipe = quart_websocket_source()
-        pipe = map_str_to_json_step(pipe)
-        pipe = filter_step(pipe, lambda x: x["event"] != "connected")
+        stream = quart_websocket_source()
+        stream = map_str_to_json_step(stream)
+        stream = filter_step(stream, lambda x: x["event"] != "connected")
         if expose_all_messages:
-            pipe, all_twilio_messages = fork_step(pipe)
+            stream, all_twilio_messages = fork_step(stream)
         else:
             all_twilio_messages = None
-        pipe = twilio_check_sequence_step(pipe)
+        stream = twilio_check_sequence_step(stream)
         # Retrieve values once the call is connected.
-        pipe, call_sid_f = extract_value_step(
-            pipe, value=lambda x: x["start"]["callSid"]
+        stream, call_sid_f = extract_value_step(
+            stream, value=lambda x: x["start"]["callSid"]
         )
-        pipe, stream_sid_f = extract_value_step(pipe, value=lambda x: x["streamSid"])
+        stream, stream_sid_f = extract_value_step(
+            stream, value=lambda x: x["streamSid"]
+        )
         outbound_queue_f = map_future(
             call_sid_f, lambda x: current_app.current_calls[x].outbound
         )
         inbound_queue_f = map_future(
             call_sid_f, lambda x: current_app.current_calls[x].inbound
         )
-        audio, events = partition_step(pipe, lambda x: x["event"] == "media")
+        audio, events = partition_step(stream, lambda x: x["event"] == "media")
         audio = twilio_media_to_audio_bytes_step(audio)
         events = twilio_close_on_stop_step(events)
         events = twilio_format_events_step(events)

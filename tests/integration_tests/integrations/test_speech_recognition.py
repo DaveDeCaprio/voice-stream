@@ -15,14 +15,14 @@
 #
 # @pytest.mark.asyncio
 # async def test_recognize_whisper():
-#     pipe = wav_mulaw_file_source(example_file("testing.wav"), chunk_size=0)
-#     pipe = map_step(pipe, remove_wav_header)
-#     pipe = python_speech_recognition_step(
-#         pipe,
+#     stream = wav_mulaw_file_source(example_file("testing.wav"), chunk_size=0)
+#     stream = map_step(stream, remove_wav_header)
+#     stream = python_speech_recognition_step(
+#         stream,
 #         "recognize_whisper_api",
 #         sample_rate=8000,
 #         sample_width=1,
 #         api_key=os.environ['OPENAI_API_KEY'],
 #     )
-#     ret = await array_sink(pipe)
-#     assert ret == ["testing 1 2 3 testing 1 2 3"]
+#     out = await array_sink(stream)
+#     assert out == ["testing 1 2 3 testing 1 2 3"]

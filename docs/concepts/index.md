@@ -16,18 +16,18 @@ handles the actual execution of the data flow.  In a typical voicebot, the steps
 The code to implement this in VoiceStream maps very closely to the process described above: 
 
 ```
-    pipe = fastapi_websocket_bytes_source(websocket)
-    pipe = google_speech_v1_step(
-        pipe,
+    stream = fastapi_websocket_bytes_source(websocket)
+    stream = google_speech_v1_step(
+        stream,
         speech_async_client,
         audio_format=AudioFormat.WEBM_OPUS,
     )
-    pipe = langchain_step(pipe, chain)
-    pipe = google_text_to_speech_step(
-        pipe, text_to_speech_async_client, audio_format=AudioFormat.MP3
+    stream = langchain_step(stream, chain)
+    stream = google_text_to_speech_step(
+        stream, text_to_speech_async_client, audio_format=AudioFormat.MP3
     )
-    pipe = map_step(pipe, lambda x: x.audio)
-    await fastapi_websocket_bytes_sink(pipe, websocket)
+    stream = map_step(stream, lambda x: x.audio)
+    await fastapi_websocket_bytes_sink(stream, websocket)
 ```
 
 Don't let the simplicity of this code fool you.  Under the hood, this creates a very performant pipeline for voicebot processing.
@@ -66,9 +66,9 @@ Here is a very simple flow that shows you how it works.  To help focus on the fl
 This flow copies a text file, converting it to lowercase as it goes (don't worry, we'll get to voice in a minute):
 
 ```
-    pipe = text_file_source('test.txt')
-    pipe = map_step(pipe, lambda x: x.lower())
-    done = text_file_sink(pipe, 'copy.txt')
+    stream = text_file_source('test.txt')
+    stream = map_step(stream, lambda x: x.lower())
+    done = text_file_sink(stream, 'copy.txt')
     await done
 ```
 
@@ -77,25 +77,25 @@ This flow copies a text file, converting it to lowercase as it goes (don't worry
 Let's review the flow above in detail.
 
 ```
-    pipe = text_file_source('test.txt')
+    stream = text_file_source('test.txt')
 ```
 
 `text_file_source` is a source that reads lines form a text file.  It returns an AsyncIterator[str], where each item in 
-the iterator is a line in the file.  We assign that to the variable pipe.  By convention the default variable name for 
-a data flow in VoiceStream is `pipe`.
+the iterator is a line in the file.  We assign that to the variable `stream`.  By convention the default VoiceStream
+variable name for a single stream in a data flow is `stream`.
 
-`pipe = map_step(pipe, lambda x: x.lower())`
+`stream = map_step(stream, lambda x: x.lower())`
 
 The `map_step` takes the AsyncIterator created by the text file source and applies a function to each item (each line in the text file).
 In this case we use a lambda to convert the line to lower case.  The result is a new AsyncIterator the produces lowercase lines.
-We reassign pipe to this new iterator.  Again, this is the standard convention in VoiceStream.  The pipe is updated as it is built.
+We reassign `stream` to this new iterator.  Again, this is the standard convention in VoiceStream.  The stream is updated as it is built.
 
-`done = text_file_sink(pipe, 'copy.txt')`
+`out = text_file_sink(stream, 'copy.txt')`
 
 Finally, we use the `text_file_sink` to write the output to a file.  Since this is a sink, and doesn't return an AsyncIterator, we use a different variable.
 You can't append a new step after the end of the sink.
 
-`await done`
+`await out`
 
 It's important to understand that up until this last line, nothing has actually happened.  We've been setting up the data flow, but not running it.
 Data flows are only run once you await on their sinks.  Awaiting on this sink causes text_file_sink to start pulling from the AsyncIterator returned by the 
@@ -125,11 +125,11 @@ There are a variety of steps within VoiceStream to handle flow control:
 Here is an example flow that reads a text file and writes it to two different files, one with the even lines and one with the odd lines:
 
 ```
-    pipe = text_file_source('test.txt')
-    even_pipe, odd_pipe = partition_step(pipe, lambda x: x % 2 == 0)
-    even_done = text_file_sink(even_pipe, 'even.txt')
-    odd_done = text_file_sink(odd_pipe, 'odd.txt')
+    stream = text_file_source('test.txt')
+    even_stream, odd_stream = partition_step(stream, lambda x: x % 2 == 0)
+    even_done = text_file_sink(even_stream, 'even.txt')
+    odd_done = text_file_sink(odd_stream, 'odd.txt')
     await asyncio.gather(even_done, odd_done)
 ``` 
-When running a data flow, you generally wait on all the sinks in the flow at once.  Running one sink without the other can cause the pipeline to hang. 
+When running a data flow, you generally wait on all the sinks in the flow at once.  Running one sink without the other can cause the streamline to hang. 
 

@@ -63,8 +63,8 @@ async def test_switchable_iterator():
     await asyncio.sleep(0.3)
     iterator.disconnect()
     iterator.switch(generator2())
-    ret = await sink
-    assert ret == [1, 2, "a", "b"]
+    out = await sink
+    assert out == [1, 2, "a", "b"]
 
 
 @pytest.mark.asyncio
@@ -74,14 +74,14 @@ async def test_substream():
     def mini_stream(async_iter):
         nonlocal substream_ix
         substream_ix += 1
-        pipe = flatten_step(async_iter)
-        pipe = map_step(pipe, lambda x: f"Sub {substream_ix}: {x}")
-        return pipe
+        stream = flatten_step(async_iter)
+        stream = map_step(stream, lambda x: f"Sub {substream_ix}: {x}")
+        return stream
 
-    pipe = array_source(["ab", "bc", "c"])
-    pipe = substream_step(pipe, mini_stream)
-    ret = await array_sink(pipe)
-    assert ret == ["Sub 1: a", "Sub 1: b", "Sub 2: b", "Sub 2: c", "Sub 3: c"]
+    stream = array_source(["ab", "bc", "c"])
+    stream = substream_step(stream, mini_stream)
+    out = await array_sink(stream)
+    assert out == ["Sub 1: a", "Sub 1: b", "Sub 2: b", "Sub 2: c", "Sub 3: c"]
 
 
 @pytest.mark.asyncio
@@ -97,20 +97,20 @@ async def test_cancellable_substream():
         logger.debug("Sending cancel")
         yield 1
 
-    pipe_instance = 1
+    stream_instance = 1
 
-    async def create_pipe(iter):
-        nonlocal pipe_instance
-        instance_count = pipe_instance
-        pipe_instance += 1
+    async def create_stream(iter):
+        nonlocal stream_instance
+        instance_count = stream_instance
+        stream_instance += 1
         async for item in iter:
             await asyncio.sleep(0.2)
             yield f"Instance {instance_count}: {item}"
 
-    pipe = cancelable_substream_step(generator(), cancel_generator(), create_pipe)
-    pipe = log_step(pipe, "Output")
-    ret = await array_sink(pipe)
-    assert ret == ["Instance 1: 1", "Instance 3: 3", "Instance 4: 4"]
+    stream = cancelable_substream_step(generator(), cancel_generator(), create_stream)
+    stream = log_step(stream, "Output")
+    out = await array_sink(stream)
+    assert out == ["Instance 1: 1", "Instance 3: 3", "Instance 4: 4"]
 
 
 @pytest.mark.asyncio
@@ -125,29 +125,31 @@ async def test_cancellable_substream_multi_output():
         await asyncio.sleep(0.15)
         yield 1
 
-    pipe_instance = 1
+    stream_instance = 1
 
     async def delay(async_iter):
         async for item in async_iter:
             await asyncio.sleep(0.1)
             yield item
 
-    def create_pipe(iter):
-        nonlocal pipe_instance
-        instance_count = pipe_instance
-        pipe_instance += 1
-        pipe1, pipe2 = fork_step(iter)
-        pipe1 = map_step(pipe1, lambda x: f"Instance {instance_count}: {x}")
-        pipe1 = delay(pipe1)
-        pipe2 = map_step(pipe2, lambda x: f"Alternate Instance {instance_count}: {x}")
-        return pipe1, pipe2
+    def create_stream(iter):
+        nonlocal stream_instance
+        instance_count = stream_instance
+        stream_instance += 1
+        stream1, stream2 = fork_step(iter)
+        stream1 = map_step(stream1, lambda x: f"Instance {instance_count}: {x}")
+        stream1 = delay(stream1)
+        stream2 = map_step(
+            stream2, lambda x: f"Alternate Instance {instance_count}: {x}"
+        )
+        return stream1, stream2
 
-    pipe1, pipe2 = cancelable_substream_step(
-        generator(), cancel_generator(), create_pipe
+    stream1, stream2 = cancelable_substream_step(
+        generator(), cancel_generator(), create_stream
     )
-    pipe1 = array_sink(pipe1)
-    pipe2 = array_sink(pipe2)
-    result = await asyncio.gather(pipe1, pipe2)
+    stream1 = array_sink(stream1)
+    stream2 = array_sink(stream2)
+    result = await asyncio.gather(stream1, stream2)
     logger.info(f"Result: {result}")
     assert result[0] == [
         "Instance 1: 1",
@@ -172,24 +174,26 @@ async def test_interruptable_substream_step():
         await asyncio.sleep(0.2)
         yield 4
 
-    pipe_instance = 1
+    stream_instance = 1
 
-    async def create_pipe(iter):
+    async def create_stream(iter):
         # logger.info("Creating substream")
-        nonlocal pipe_instance
-        instance_count = pipe_instance
-        pipe_instance += 1
+        nonlocal stream_instance
+        instance_count = stream_instance
+        stream_instance += 1
         async for item in iter:
             # logger.info("In substream")
             yield f"Substream {instance_count} Output 1: {item}"
             await asyncio.sleep(0.1)
             yield f"Substream {instance_count} Output 2: {item}"
 
-    pipe = generator()
-    pipe = log_step(pipe, "In")
-    pipe = interruptable_substream_step(pipe, create_pipe, cancel_messages=["Cancel"])
-    pipe = log_step(pipe, "Out")
-    result = await array_sink(pipe)
+    stream = generator()
+    stream = log_step(stream, "In")
+    stream = interruptable_substream_step(
+        stream, create_stream, cancel_messages=["Cancel"]
+    )
+    stream = log_step(stream, "Out")
+    result = await array_sink(stream)
     logger.info(f"Result: {result}")
     assert result == [
         "Substream 1 Output 1: 1",

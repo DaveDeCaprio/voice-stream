@@ -25,22 +25,22 @@ logger = logging.getLogger(__name__)
 @pytest.mark.asyncio
 async def test_llm_and_tts(tmp_path):
     chain = math_physics_routing()
-    pipe = array_source(
+    stream = array_source(
         [
             "In one sentence, explain the second law of thermodynamics.",
             "What is 4*8",
         ]
     )
-    pipe = langchain_step(pipe, chain, on_completion="")
-    pipe = str_buffer_step(pipe)
-    pipe = log_step(pipe, "LLM output")
+    stream = langchain_step(stream, chain, on_completion="")
+    stream = str_buffer_step(stream)
+    stream = log_step(stream, "LLM output")
     text_to_speech_async_client = TextToSpeechAsyncClient()
-    pipe = google_text_to_speech_step(
-        pipe, text_to_speech_async_client, audio_format=AudioFormat.WAV_MULAW_8KHZ
+    stream = google_text_to_speech_step(
+        stream, text_to_speech_async_client, audio_format=AudioFormat.WAV_MULAW_8KHZ
     )
-    pipe = map_step(pipe, lambda x: x.audio)
-    pipe = byte_buffer_step(pipe)
-    ret = await wav_mulaw_file_sink(pipe, tmp_path.joinpath("chain_tts.wav"))
+    stream = map_step(stream, lambda x: x.audio)
+    stream = byte_buffer_step(stream)
+    out = await wav_mulaw_file_sink(stream, tmp_path.joinpath("chain_tts.wav"))
 
 
 @pytest.mark.asyncio
@@ -50,9 +50,9 @@ async def test_gemini():
         | ChatVertexAI(model_name="gemini-pro")
         | StrOutputParser()
     )
-    pipe = single_source({"query": "What's 2+2?"})
-    pipe = langchain_step(pipe, chain, on_completion="")
-    ret = await array_sink(pipe)
-    logger.info(f"Gemini response {ret}")
-    assert len(ret) == 2
-    assert ret[1] == ""
+    stream = single_source({"query": "What's 2+2?"})
+    stream = langchain_step(stream, chain, on_completion="")
+    out = await array_sink(stream)
+    logger.info(f"Gemini response {out}")
+    assert len(out) == 2
+    assert out[1] == ""

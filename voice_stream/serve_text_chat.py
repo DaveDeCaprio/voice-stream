@@ -110,14 +110,14 @@ chain = load_attribute(os.environ["EXAMPLE_CHAIN"])()
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     session_id = uuid.uuid4()
-    pipe = fastapi_websocket_text_source(websocket)
-    pipe = map_step(
-        pipe,
+    stream = fastapi_websocket_text_source(websocket)
+    stream = map_step(
+        stream,
         lambda x: {
             "input": {"message": x},
             "config": {"configurable": {"session_id": session_id}},
         },
     )
-    pipe = langchain_step(pipe, chain, input_key="input", config_key="config")
-    pipe = map_step(pipe, lambda x: x, ignore_none=True)
-    await fastapi_websocket_text_sink(pipe, websocket)
+    stream = langchain_step(stream, chain, input_key="input", config_key="config")
+    stream = map_step(stream, lambda x: x, ignore_none=True)
+    await fastapi_websocket_text_sink(stream, websocket)

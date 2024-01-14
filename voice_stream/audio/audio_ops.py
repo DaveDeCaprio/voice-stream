@@ -1,20 +1,29 @@
 import asyncio
-import io
+import inspect
 import logging
+import time
 from typing import AsyncIterator, Union
 
 import asyncstdlib
-from mutagen.mp3 import MP3
 
+from voice_stream import (
+    chunk_bytes_step,
+    async_init_step,
+    extract_value_step,
+    substream_step,
+)
 from voice_stream.audio.async_wav_file import (
     AsyncMuLawStreamWriter,
     AsyncMuLawStreamReader,
 )
-from voice_stream.audio import AudioFormatError, AudioFormat
 from voice_stream.audio.audio_mp3 import find_frame_boundaries, calculate_split_points
 from voice_stream.audio.audio_ogg import OggPage, OpusIdPacket
-from voice_stream.core import AwaitableOrObj
-from voice_stream.types import resolve_awaitable_or_obj
+from voice_stream.audio.audio_utils import (
+    AudioFormatError,
+    AudioFormat,
+    get_audio_length,
+)
+from voice_stream.types import resolve_awaitable_or_obj, AwaitableOrObj, map_future
 
 logger = logging.getLogger(__name__)
 
@@ -180,17 +189,118 @@ def remove_wav_header(wav_bytes: bytes) -> bytes:
     raise ValueError("WAV file does not contain a 'data' chunk")
 
 
-def get_audio_length(audio_format: AudioFormat, audio: bytes):
-    if audio_format == AudioFormat.WAV_MULAW_8KHZ:
-        return len(audio) / 8000.0
-    elif audio_format == AudioFormat.OGG_OPUS:
-        first_page = OggPage.from_data(audio, 0)
-        header = OpusIdPacket.from_ogg_page(first_page)
-        page = OggPage.last_page_from_data(audio)
-        return page.granule / float(header.input_sample_rate)
-    elif audio_format == AudioFormat.MP3:
-        return MP3(io.BytesIO(audio)).info.length
+def audio_rate_limit_step(
+    async_iter: AsyncIterator[bytes],
+    audio_format: AwaitableOrObj[AudioFormat],
+    buffer_seconds: float,
+):
+    def init(async_iter, af):
+        if af == AudioFormat.WAV_MULAW_8KHZ:
+            SAMPLE_RATE = 8000
+            audio = chunk_bytes_step(async_iter, int(buffer_seconds * SAMPLE_RATE))
+            audio = raw_audio_rate_limit_step(
+                audio, SAMPLE_RATE, buffer_seconds=buffer_seconds
+            )
+        elif af == AudioFormat.OGG_OPUS:
+            audio = _opus_rate_limit_step(async_iter, buffer_seconds=buffer_seconds)
+        elif af == AudioFormat.MP3:
+            audio = _mp3_rate_limit_step(async_iter, buffer_seconds=buffer_seconds)
+        else:
+            raise AudioFormatError(f"Unsupported audio format: {audio_format}")
+        return audio
+
+    async def async_init(async_iter):
+        af = await resolve_awaitable_or_obj(audio_format)
+        return init(async_iter, af)
+
+    if inspect.isawaitable(audio_format):
+        return async_init_step(async_iter, async_init)
     else:
-        raise AudioFormatError(
-            f"Unsupported audio type '{audio_format}' for getting total audio length"
+        return init(async_iter, audio_format)
+
+
+def _opus_rate_limit_step(async_iter: AsyncIterator[bytes], buffer_seconds: float):
+    def get_bytes_per_second(data):
+        duration = get_audio_length(AudioFormat.OGG_OPUS, data)
+        length_in_bytes = len(data)
+        return int(length_in_bytes / duration)
+
+    def opus_substream(async_iter: AsyncIterator[bytes]):
+        stream, bytes_per_second_f = extract_value_step(
+            async_iter, get_bytes_per_second
         )
+        chunk_size_f = map_future(
+            bytes_per_second_f,
+            lambda bytes_per_second: int(buffer_seconds * bytes_per_second / 2),
+        )
+        stream = chunk_bytes_step(stream, chunk_size_f)
+        # stream = log_step(stream, "Audio Chunk", lambda x: len(x))
+        stream = raw_audio_rate_limit_step(
+            stream, bytes_per_second_f, buffer_seconds=buffer_seconds
+        )
+        stream = ogg_page_separator_step(stream)
+        # stream = log_step(stream, "Full OGG Page", lambda x: len(x))
+        return stream
+
+    out = substream_step(async_iter, opus_substream)
+    return out
+
+
+def _mp3_rate_limit_step(async_iter: AsyncIterator[bytes], buffer_seconds: float):
+    def get_bytes_per_second(data):
+        seconds = get_audio_length(AudioFormat.MP3, data)
+        length_in_bytes = len(data)
+        return int(length_in_bytes / seconds)
+
+    def mp3_substream(async_iter: AsyncIterator[bytes]):
+        stream, bytes_per_second_f = extract_value_step(
+            async_iter, get_bytes_per_second
+        )
+        chunk_size_f = map_future(
+            bytes_per_second_f,
+            lambda bytes_per_second: int(buffer_seconds * bytes_per_second / 2),
+        )
+        stream = mp3_chunk_step(stream, chunk_size_f)
+        stream = raw_audio_rate_limit_step(
+            stream, bytes_per_second_f, buffer_seconds=buffer_seconds
+        )
+        return stream
+
+    out = substream_step(async_iter, mp3_substream)
+    return out
+
+
+async def raw_audio_rate_limit_step(
+    async_iter: AsyncIterator[bytes],
+    bytes_per_second: AwaitableOrObj[int],
+    buffer_seconds: AwaitableOrObj[float],
+) -> AsyncIterator[bytes]:
+    """Limits the rate of sending audio bytes down the stream.  Note that this step always sends a full chunk.
+    buffer_seconds is the number of seconds of audio left before we send the next chunk.  Usually, you will want to put
+    a max size chunk step in before this.  buffer_seconds should be large enough to make sure the send executes.
+    """
+    last_send = time.perf_counter()
+    queued_audio_seconds = 0
+
+    def compute_remaining(now):
+        # Compute the amount of audio remaining to be played in seconds.
+        return max(0, queued_audio_seconds - (now - last_send))
+
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            resolved_buffer_seconds = await resolve_awaitable_or_obj(buffer_seconds)
+            now = time.perf_counter()
+            # Compute the amount of audio remaining to be played in seconds.
+            remaining_audio_seconds = compute_remaining(now)
+            # If we have more than the buffer, sleep until we hit the buffer limit
+            if remaining_audio_seconds > resolved_buffer_seconds:
+                await asyncio.sleep(remaining_audio_seconds - resolved_buffer_seconds)
+                # We don't know how long we actually slept.
+                now = time.perf_counter()
+                remaining_audio_seconds = compute_remaining(now)
+            resolved_bytes_per_second = await resolve_awaitable_or_obj(bytes_per_second)
+            queued_audio_seconds = (
+                remaining_audio_seconds + len(item) / resolved_bytes_per_second
+            )
+            last_send = now
+            yield item

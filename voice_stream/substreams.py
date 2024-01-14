@@ -4,7 +4,6 @@ from typing import (
     AsyncIterator,
     Callable,
     Tuple,
-    Any,
     Optional,
     List,
     Union,
@@ -41,19 +40,19 @@ async def substream_on_dict_key_step(
             current_dict = item
             yield item[key]
 
-    pipe = input_gen()
-    pipe = substream_func(pipe)
-    async for item in pipe:
-        ret = {**current_dict, key: item}
-        yield ret
+    stream = input_gen()
+    stream = substream_func(stream)
+    async for item in stream:
+        out = {**current_dict, key: item}
+        yield out
 
 
 async def substream_step(async_iter: AsyncIterator[T], substream_func):
     """For each item in the input iterator, creates a substream and feeds the item into it."""
     async for item in async_iter:
-        pipe = single_source(item)
-        pipe = substream_func(pipe)
-        async for sub_item in pipe:
+        stream = single_source(item)
+        stream = substream_func(stream)
+        async for sub_item in stream:
             yield sub_item
 
 

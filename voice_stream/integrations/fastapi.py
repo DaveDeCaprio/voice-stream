@@ -44,9 +44,9 @@ async def fastapi_websocket_text_source(websocket: WebSocket) -> AsyncIterator[s
         >>>
         >>> @app.websocket("/ws")
         >>> async def websocket_endpoint(websocket: WebSocket):
-        >>>     pipe = fastapi_websocket_text_source(websocket)
-        >>>     pipe = map_step(pipe, lambda x: "Echo: "+x)
-        >>>     await fastapi_websocket_text_sink(pipe, websocket)
+        >>>     stream = fastapi_websocket_text_source(websocket)
+        >>>     stream = map_step(stream, lambda x: "Echo: "+x)
+        >>>     await fastapi_websocket_text_sink(stream, websocket)
     """
     await websocket.accept()
     try:
@@ -83,9 +83,9 @@ async def fastapi_websocket_bytes_source(websocket: WebSocket) -> AsyncIterator[
     >>>
     >>> @app.websocket("/ws")
     >>> async def websocket_endpoint(websocket: WebSocket):
-    >>>     pipe = fastapi_websocket_text_source(websocket)
-    >>>     pipe = map_step(pipe, lambda x: "Echo: "+x)
-    >>>     await fastapi_websocket_text_sink(pipe, websocket)
+    >>>     stream = fastapi_websocket_text_source(websocket)
+    >>>     stream = map_step(stream, lambda x: "Echo: "+x)
+    >>>     await fastapi_websocket_text_sink(stream, websocket)
 
     Notes
     -----
@@ -134,9 +134,9 @@ async def fastapi_websocket_json_source(websocket: WebSocket) -> AsyncIterator[d
     >>>
     >>> @app.websocket("/ws")
     >>> async def websocket_endpoint(websocket: WebSocket):
-    >>>     pipe = fastapi_websocket_json_source(websocket)
-    >>>     pipe = log_step(pipe, "JSON received")
-    >>>     await empty_step(pipe, websocket)
+    >>>     stream = fastapi_websocket_json_source(websocket)
+    >>>     stream = log_step(stream, "JSON received")
+    >>>     await empty_step(stream, websocket)
 
     Notes
     -----
@@ -184,9 +184,9 @@ async def fastapi_websocket_text_sink(
     >>>
     >>> @app.websocket("/ws")
     >>> async def websocket_endpoint(websocket: WebSocket):
-    >>>     pipe = fastapi_websocket_json_source(websocket)
-    >>>     pipe = log_step(pipe, "JSON received")
-    >>>     await fastapi_websocket_text_sink(pipe, websocket)
+    >>>     stream = fastapi_websocket_json_source(websocket)
+    >>>     stream = log_step(stream, "JSON received")
+    >>>     await fastapi_websocket_text_sink(stream, websocket)
 
     Notes
     -----
@@ -239,9 +239,9 @@ async def fastapi_websocket_bytes_sink(
     >>>
     >>> @app.websocket("/ws")
     >>> async def websocket_endpoint(websocket: WebSocket):
-    >>>     pipe = fastapi_websocket_bytes_source(websocket)
-    >>>     pipe = log_step(pipe, "# Bytes received", lambda x: len(x))
-    >>>     await fastapi_websocket_bytes_sink(pipe, websocket)
+    >>>     stream = fastapi_websocket_bytes_source(websocket)
+    >>>     stream = log_step(stream, "# Bytes received", lambda x: len(x))
+    >>>     await fastapi_websocket_bytes_sink(stream, websocket)
 
     Notes
     -----

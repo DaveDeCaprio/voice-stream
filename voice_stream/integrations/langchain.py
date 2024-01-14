@@ -43,26 +43,26 @@ class LangchainVoiceFlow:
         tts_step: TextToSpeechStep,
         langchain_postprocess: Optional[GenericStepFunc] = None,
     ) -> LangchainVoiceFlow:
-        pipe, speech_start = speech_step(audio_input)
+        stream, speech_start = speech_step(audio_input)
         speech_start = filter_spurious_speech_start_events_step(speech_start)
-        pipe, text_input = fork_step(pipe)
+        stream, text_input = fork_step(stream)
 
         def create_output_chain(
-            pipe: AsyncIterator[str],
+            stream: AsyncIterator[str],
         ) -> (AsyncIterator[bytes], AsyncIterator[str]):
-            pipe = langchain_step(pipe, chain, on_completion="")
+            stream = langchain_step(stream, chain, on_completion="")
             if langchain_postprocess:
-                pipe = langchain_postprocess(pipe)
-            # pipe = log_step(pipe, "Token")
-            return tts_with_buffer_and_rate_limit_step(pipe, tts_step)
+                stream = langchain_postprocess(stream)
+            # stream = log_step(stream, "Token")
+            return tts_with_buffer_and_rate_limit_step(stream, tts_step)
 
-        pipe, text_output = cancelable_substream_step(
-            pipe, speech_start, create_output_chain
+        stream, text_output = cancelable_substream_step(
+            stream, speech_start, create_output_chain
         )
         return cls(
             text_input=text_input,
             text_output=text_output,
-            audio_output=pipe,
+            audio_output=stream,
         )
 
 

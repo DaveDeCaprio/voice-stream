@@ -28,6 +28,7 @@ from voice_stream.types import (
     AwaitableOrObj,
     EndOfStreamMarker,
     is_async_iterator,
+    to_source,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,8 +53,8 @@ def empty_source() -> AsyncIterator[T]:
 
     Examples
     --------
-    >>> pipe = empty_source()
-    >>> done = await array_sink(pipe)
+    >>> stream = empty_source()
+    >>> done = await array_sink(stream)
     >>> assert done == []
 
     Notes
@@ -79,8 +80,8 @@ def none_source() -> AsyncIterator[None]:
 
     Examples
     --------
-    >>> pipe = empty_source()
-    >>> done = await array_sink(pipe)
+    >>> stream = empty_source()
+    >>> done = await array_sink(stream)
     >>> assert done == [None]
 
     Notes
@@ -120,9 +121,9 @@ async def empty_sink(async_iter: AsyncIterator[T]) -> None:
     >>> # If your only goal is to log values and not do anything with them
     >>> # The data flow still needs to have a sink to run correctly.
     >>>
-    >>> pipe = array_source([1,2,3])
-    >>> pipe = log_step(pipe, "Value")
-    >>> await empty_sink(pipe)
+    >>> stream = array_source([1,2,3])
+    >>> stream = log_step(stream, "Value")
+    >>> await empty_sink(stream)
     """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for _ in owned_aiter:
@@ -150,9 +151,9 @@ async def single_source(item: T) -> AsyncIterator[T]:
 
     Examples
     --------
-    >>> pipe = single_source("Hello, world")
-    >>> ret = await array_sink(pipe)
-    >>> assert ret == ["Hello, world"]
+    >>> stream = single_source("Hello, world")
+    >>> out = await array_sink(stream)
+    >>> assert out == ["Hello, world"]
 
     Notes
     -----
@@ -182,9 +183,9 @@ async def array_source(array: list[T]) -> AsyncIterator[T]:
 
     Examples
     --------
-    >>> pipe = array_source([1,2,3])
-    >>> pipe = log_step(pipe, "Value")
-    >>> await empty_sink(pipe)
+    >>> stream = array_source([1,2,3])
+    >>> stream = log_step(stream, "Value")
+    >>> await empty_sink(stream)
 
     Notes
     -----
@@ -216,10 +217,10 @@ async def array_sink(async_iter: AsyncIterator[T]) -> list[T]:
 
     Examples
     --------
-    >>> pipe = array_source([1,2,3])
-    >>> pipe = log_step(pipe, "Value")
-    >>> ret = await array_sink(pipe)
-    >>> assert ret == [1,2,3]
+    >>> stream = array_source([1,2,3])
+    >>> stream = log_step(stream, "Value")
+    >>> out = await array_sink(stream)
+    >>> assert out == [1,2,3]
 
     Notes
     -----
@@ -246,13 +247,13 @@ class QueueAsyncIterator:
     Examples
     --------
     >>> queue = queue_source() # With no input arguments, this returns a QueueAsyncIterator.
-    >>> pipe = queue
+    >>> stream = queue
     >>> done = array_sink()
     >>> await queue_iter.put(1)
     >>> await queue_iter.put(2)
     >>> await queue_iter.put(EndOfStreaMarker)
-    >>> ret = await done
-    >>> assert ret == [1, 2]
+    >>> out = await done
+    >>> assert out == [1, 2]
     """
 
     def __init__(self):
@@ -304,8 +305,8 @@ def queue_source(
     >>> queue.put(1)
     >>> queue.put(2)
     >>> queue.put(EndOfStreamMarker)
-    >>> pipe = queue_source()
-    >>> done = await array_sink(pipe)
+    >>> stream = queue_source()
+    >>> done = await array_sink(stream)
     >>> assert done == [1,2]
 
     Notes
@@ -360,7 +361,7 @@ async def queue_sink(
 
     Examples
     --------
-    >>> pipe = array_source([1,2])
+    >>> stream = array_source([1,2])
     >>> queue = await queue_sink()
     >>> assert len(queue) == 2
     >>> assert queue.get() == 1
@@ -418,8 +419,8 @@ async def text_file_source(filename: str) -> AsyncIterator[str]:
 
     Examples
     --------
-    >>> pipe = text_file_source("example.txt")
-    >>> done = await text_file_sink(pipe, "copy.txt")
+    >>> stream = text_file_source("example.txt")
+    >>> done = await text_file_sink(stream, "copy.txt")
     """
     async with aiofiles.open(filename, "rt") as f:
         async for line in f:
@@ -454,8 +455,8 @@ async def text_file_sink(
 
     Examples
     --------
-    >>> pipe = text_file_source("example.txt")
-    >>> done = await text_file_sink(pipe, "copy.txt")
+    >>> stream = text_file_source("example.txt")
+    >>> done = await text_file_sink(stream, "copy.txt")
     """
     return await _file_sink(async_iter, filename, "wt", lambda x: f"{x}\n")
 
@@ -491,8 +492,8 @@ async def binary_file_source(
 
     Examples
     --------
-    >>> pipe = binary_file_source("example.bin")
-    >>> pipe = log_step(pipe, "Bytes read", lambda x: len(x))
+    >>> stream = binary_file_source("example.bin")
+    >>> stream = log_step(stream, "Bytes read", lambda x: len(x))
     >>> done = await binary_file_sink("copy.bin")
     Bytes read 4096
     Bytes read 4096
@@ -537,8 +538,8 @@ async def binary_file_sink(
 
     Examples
     --------
-    >>> pipe = binary_file_source("example.bin")
-    >>> pipe = log_step(pipe, "Bytes read", lambda x: len(x))
+    >>> stream = binary_file_source("example.bin")
+    >>> stream = log_step(stream, "Bytes read", lambda x: len(x))
     >>> done = await binary_file_sink("copy.bin")
     Bytes read 4096
     Bytes read 4096
@@ -590,13 +591,13 @@ def map_str_to_json_step(async_iter: AsyncIterator[str]) -> AsyncIterator[dict]:
 
     Examples
     --------
-    >>> pipe = array_source([
+    >>> stream = array_source([
     ...     '{"name": "Alice", "age": 30}',
     ...     '{"name": "Bob", "age": 25}',
     ... ])
-    >>> pipe = map_str_to_json_step(pipe)
-    >>> pipe = map_step(pipe, lambda x: x['age'])
-    >>> await array_sink(pipe)
+    >>> stream = map_str_to_json_step(stream)
+    >>> stream = map_step(stream, lambda x: x['age'])
+    >>> await array_sink(stream)
     [30, 25]
     return map_step(async_iter, lambda x: json.loads(x))
     """
@@ -625,9 +626,9 @@ async def flatten_step(
 
     Examples
     --------
-    >>> pipe = array_source([[1,2], [3,4]])
-    >>> pipe = flatten_step(pipe)
-    >>> done = await array_sink(pipe)
+    >>> stream = array_source([[1,2], [3,4]])
+    >>> stream = flatten_step(stream)
+    >>> done = await array_sink(stream)
     >>> assert done == [1, 2, 3, 4]
     """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
@@ -674,9 +675,9 @@ def async_init_step(
     Examples
     --------
     # Copy a file, generating a name based on the first line of the file.
-    >>> pipe = text_file_source("example.txt")
-    >>> pipe, name = extract_value_step(pipe, lambda x: x)
-    >>> done = await async_init_step(pipe, lambda x: text_file_sink(x, resolve_awaitable_or_obj(name)), num_outputs=0)
+    >>> stream = text_file_source("example.txt")
+    >>> stream, name = extract_value_step(stream, lambda x: x)
+    >>> done = await async_init_step(stream, lambda x: text_file_sink(x, resolve_awaitable_or_obj(name)), num_outputs=0)
     """
 
     class AsyncInitInputIterator:
@@ -692,9 +693,9 @@ def async_init_step(
 
         async def __anext__(self):
             if self.first_item_task:
-                ret = self.first_item_task
+                out = self.first_item_task
                 self.first_item_task = None
-                return await ret
+                return await out
             else:
                 return await self.iter.__anext__()
 
@@ -737,7 +738,37 @@ def extract_value_step(
     value: Callable[[T], Any],
     condition: Optional[Callable[[T], bool]] = None,
 ) -> Tuple[AsyncIterator[T], asyncio.Future[Any]]:
-    """Extracts a value from the iterator.  Returns the iterator and a future containing the value"""
+    """
+    Extracts a value from an async iterator based on a condition, returning the iterator and a future.
+
+    This function processes an asynchronous iterator, applying a given condition to each item. The first time
+    an item meets the condition, a specified value extraction function is applied to it, and the result
+    is set in an asyncio.Future. The function returns an async iterator and the future containing the extracted value.
+    The output iterator produces all the same elements that go into it.  If the condition is not provided, the value
+    function is applied to the first item.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An input asynchronous iterator.
+    value : Callable[[T], Any]
+        A function that extracts a value from an item in the iterator.
+    condition : Optional[Callable[[T], bool]], optional
+        A function that returns True if the value should be extracted from the item.
+        If None, the value is extracted from the first item.
+
+    Returns
+    -------
+    Tuple[AsyncIterator[T], asyncio.Future[Any]]
+        The modified async iterator and a future containing the extracted value.
+
+    Examples
+    --------
+    # Copy a file, generating a name based on the first line of the file.
+    >>> stream = text_file_source("example.txt")
+    >>> stream, name = extract_value_step(stream, lambda x: x)
+    >>> done = await async_init_step(stream, lambda x: text_file_sink(x, resolve_awaitable_or_obj(name)), num_outputs=0)
+    """
     loop = asyncio.get_running_loop()
     fut = loop.create_future()
 
@@ -754,35 +785,88 @@ def extract_value_step(
 async def recover_exception_step(
     async_iter: AsyncIterator[T],
     exception_type: Type[BaseException],
-    exception_handler: Callable[[BaseException], None],
+    exception_handler: Callable[[BaseException], Any],
 ) -> AsyncIterator[T]:
-    """Wraps an async iterator and logs any exceptions that occur."""
+    """
+    Data flow step that recovers from an exception in a previous step.
+
+    This function takes an async iterator and a specified exception type. If an exception with the
+    specified type occurs during iteration, it is caught and passed to the provided exception
+    handler function. The result depends on what is returned by the exception handler:
+    * If it returns an AsyncIterator, that will be yielded and this step will end when the iterator ends.
+    * If it returns None, this step will immediately end.
+    * If it returns anything else, that object will be yielded and this step will end.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        The asynchronous iterator to be wrapped.
+    exception_type : Type[BaseException]
+        The type of exception to be caught and handled.
+    exception_handler : Callable[[BaseException], Any]
+        A function to handle the caught exception.  Returns an optional value that will be converted to an AsyncIterator.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator that handles exceptions with the specified type.
+
+    Examples
+    --------
+    >>> def gen():
+    ...    yield 1
+    ...    yield 2
+    ...    raise ValueError("No more")
+    >>> stream = gen()
+    >>> stream = recover_exeption_step(stream, ValueError, lambda x: x.args[0])
+    >>> done = await array_sink(stream)
+    >>> assert done == [1,2,"No more"]
+
+    Notes
+    -----
+    - Once the source iterator throws the exception, it will not be accessed again.
+    """
     try:
         async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
             async for item in owned_aiter:
                 yield item
     except exception_type as e:
-        yield exception_handler(e)
-
-
-async def exception_handler_step(
-    async_iter: AsyncIterator[T],
-    exception_type: Type[BaseException],
-    exception_handler: Callable[[BaseException], None],
-) -> AsyncIterator[T]:
-    """Wraps an async iterator and logs any exceptions that occur."""
-    try:
-        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
-            async for item in owned_aiter:
-                yield item
-    except exception_type as e:
-        exception_handler(e)
+        yield to_source(exception_handler(e))
 
 
 async def log_step(
     async_iter: AsyncIterator[T], name: str, formatter: Callable[[T], Any] = lambda x: x
 ) -> AsyncIterator[T]:
-    """Logs out the messages coming through a source."""
+    """
+    Data flow step that prints using the Python logger.
+
+    This function takes an async iterator and logs each item that passes through it. The logging
+    includes a specified name and uses an optional formatter function to convert items to a log-friendly format.
+    This is useful for debugging or monitoring the contents of an data flow.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        The asynchronous iterator whose items are to be logged.
+    name : str
+        A name to prepend to each logged message for identification.
+    formatter : Callable[[T], Any], optional
+        A function to format each item before logging. Defaults to a function that returns the item unchanged.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator that logs each item and then yields it.
+
+    Examples
+    --------
+    >>> stream = array_source([1,2,3])
+    >>> stream = log_step(stream, "Value squared", lambda x: x*x)
+    >>> await empty_sink()
+    Value squared: 1
+    Value squared: 4
+    Value squared: 9
+    """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
             formatted = formatter(item)
@@ -791,7 +875,32 @@ async def log_step(
 
 
 async def count_step(async_iter: AsyncIterator[T], name: str) -> AsyncIterator[T]:
-    """Counts the number of messages streamed through a pipe."""
+    """
+    Data flow step that counts the number of items.
+
+    This function takes an async iterator and counts the number of items that pass through it.
+    After the iteration completes, it logs the total count of items. This is useful for monitoring or debugging the
+    flow of data through async streamlines.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        The asynchronous iterator whose items are to be counted.
+    name : str
+        A name to use in the log message for identifying the count source.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator that counts each item and then yields it.
+
+    Examples
+    --------
+    >>> stream = array_source([1,2,3])
+    >>> stream = count_step(stream, "Value")
+    >>> await empty_sink()
+    Value count: 3
+    """
     counter = 0
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
@@ -803,6 +912,35 @@ async def count_step(async_iter: AsyncIterator[T], name: str) -> AsyncIterator[T
 async def filter_step(
     async_iter: AsyncIterator[T], condition: Callable[[T], bool]
 ) -> AsyncIterator[T]:
+    """
+    Data flow step that filters items based on a specified condition.
+
+    This function wraps an async iterator and yields only those items that satisfy a given condition.
+    It is analogous to the built-in `filter` function but for asynchronous iterators. Each item from
+    the input async iterator is passed to the `condition` function, and only items for which this
+    function returns `True` are yielded.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        The asynchronous iterator whose items are to be filtered.
+    condition : Callable[[T], bool]
+        A function that evaluates each item in the iterator. If this function returns `True`,
+        the item is yielded; otherwise, it is skipped.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator yielding only the items that satisfy the condition.
+
+    Examples
+    --------
+    >>> stream = array_source(range(4))
+    >>> stream = filter_step(stream, lambda x: x % 2 == 0)
+    >>> done = await array_sink(stream)
+    >>>
+    # Output: 0, 2
+    """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
             if condition(item):
@@ -814,8 +952,33 @@ async def map_step(
     func: Callable[[T], Output],
     ignore_none: Optional[bool] = False,
 ) -> AsyncIterator[Output]:
-    """Handles both sync and async functions
-    Optional 'ignore_none' clause indicates that a value of None should be dropped.  Allows filtering and mapping in one step.
+    """
+    Data flow step that transforms items using a mapping function.
+
+    This function applies either a synchronous or asynchronous mapping function to each item in the
+    input async iterator. If `ignore_none` is set to True, any items that are transformed to `None`
+     are not yielded. This feature allows the function to perform both transformation and filtering in a single step.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        The asynchronous iterator whose items are to be transformed.
+    func : Callable[[T], Output]
+        A mapping function to apply to each item. This can be either a synchronous or asynchronous function.
+    ignore_none : Optional[bool], default False
+        If True, items that are transformed to None by `func` are not yielded.
+
+    Returns
+    -------
+    AsyncIterator[Output]
+        An asynchronous iterator yielding transformed items, optionally skipping None values.
+
+    Examples
+    --------
+    >>> stream = array_source(range(4))
+    >>> stream = map_step(stream, lambda x: x + 2)
+    >>> done = await array_sink(stream)
+    >>> assert done == [2,3,4,5]
     """
     is_async = inspect.iscoroutinefunction(func)
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
@@ -827,18 +990,36 @@ async def map_step(
                 yield v
 
 
-async def concat_step(*async_iters: List[AsyncIterator[T]]) -> AsyncIterator[T]:
-    """Concatenates multiple iterators into a single iterator."""
-    for async_iter in async_iters:
-        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
-            async for item in owned_aiter:
-                yield item
-
-
 async def chunk_bytes_step(
     async_iter: AsyncIterator[bytes], chunk_size: AwaitableOrObj[int]
 ) -> AsyncIterator[bytes]:
-    """Breaks byte buffers into chunks with a maximum size."""
+    """
+    Data flow step that breaks long byte sequences from an asynchronous iterator into fixed-size chunks.
+
+    This function takes an asynchronous iterator yielding byte sequences and a chunk size,
+    then yields these byte sequences in chunks of the specified size. The chunk size can
+    be provided either as a direct integer value or as an awaitable object that resolves
+    to an integer. This is useful for processing large byte sequences in manageable sizes.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator that yields byte sequences.
+    chunk_size : AwaitableOrObj[int]
+        The size of each chunk as an integer, or an awaitable object that yields an integer.
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        An asynchronous iterator yielding byte chunks of the specified size.
+
+    Examples
+    --------
+    >>> stream = array_source([b'HelloWorld!', b'PythonAsyncIO']):
+    >>> stream = chunk_bytes_step(stream, chunk_size=5)
+    >>> done = await array_sink(stream)
+    >>> assert done == [b'Hello', b'World', b'!', b'Pytho', b'nAsyn', b'cIO']
+    """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
             resolved_chunk_size = await resolve_awaitable_or_obj(chunk_size)
@@ -851,7 +1032,37 @@ async def chunk_bytes_step(
 async def min_size_bytes_step(
     async_iter: AsyncIterator[bytes], min_size: AwaitableOrObj[int]
 ) -> AsyncIterator[bytes]:
-    """Ensures byte streams have a least a minimum size."""
+    """
+    Data flow steps that aggregates byte sequences to ensure a minimum size for each emitted chunk.
+
+    This function takes an asynchronous iterator yielding byte sequences and a minimum size. It aggregates
+    the byte sequences and yields them only when they reach or exceed the specified minimum size. The minimum
+    size can be provided either as a direct integer value or as an awaitable object that resolves to an
+    integer. This is useful for ensuring that chunks of data meet a size requirement before processing.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator that yields byte sequences.
+    min_size : AwaitableOrObj[int]
+        The minimum size of each chunk as an integer, or an awaitable object that yields an integer.
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        An asynchronous iterator yielding byte chunks that are at least the specified minimum size.
+
+    Examples
+    --------
+    >>> stream = array_source([b'Hello', b'World', b'PythonAsyncIO', b'End')
+    >>> stream = min_size_bytes_step(stream, min_size=10)
+    >>> done = await array_sink(stream)
+    >>> assert done == [
+    ...     b'HelloWorld',
+    ...     b'PythonAsyncIO',
+    ...     b'End',
+    ... ]
+    """
     buffer = b""
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
@@ -865,9 +1076,73 @@ async def min_size_bytes_step(
             yield buffer
 
 
+async def concat_step(*async_iters: List[AsyncIterator[T]]) -> AsyncIterator[T]:
+    """
+    Data flow step that combines multiple streams by concatenating them.
+
+    This function takes a list of asynchronous iterators and concatenates their elements
+    into a single async iterator. It iterates over each input iterator in the order they
+    are provided, yielding all items from each before moving on to the next.
+
+    Parameters
+    ----------
+    async_iters : List[AsyncIterator[T]]
+        A list of asynchronous iterators to be concatenated.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        A single asynchronous iterator yielding items from all provided iterators in sequence.
+
+    Examples
+    --------
+    >>> stream1 = array_source([1,2])
+    >>> stream2 = array_source([3,4])
+    >>> stream = concat_step(stream1, stream2)
+    >>> done = await array_sink(stream)
+    >>> assert done == [1,2,3,4]
+    """
+    for async_iter in async_iters:
+        async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            async for item in owned_aiter:
+                yield item
+
+
 async def merge_step(*async_iters: list[AsyncIterator[T]]) -> AsyncIterator[T]:
-    """Merges multiple iterators into one.  Differs from concat in that it takes from both iterators at the same time.
-    An exception in any iterators cancels all."""
+    """
+    Data flow step that merges multiple streams into one, consuming from all iterators concurrently.
+
+    Unlike concatenation which consumes one iterator at a time, `merge_step` interleaves items from all
+    provided iterators as they become available. The merged iterator continues until all input iterators
+    are exhausted. If an exception occurs in any of the iterators, all others are canceled.
+
+    Parameters
+    ----------
+    async_iters : list[AsyncIterator[T]]
+        A list of asynchronous iterators to be merged.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator yielding items from all input iterators in the order they become available.
+
+    Examples
+    --------
+    >>> async def async_iter1():
+    ...     for i in [1,2,3]:
+    ...         await asyncio.sleep(0.3)
+    ...         yield i
+    >>> async def async_iter2():
+    ...     for i in [4,5,6]:
+    ...         await asyncio.sleep(0.5)
+    ...         yield i
+    >>> stream1 = async_iter1()
+    >>> stream2 = async_iter2()
+    >>> stream = merge_step(stream1, stream2)
+    >>> done = await array_sink(stream)
+    >>> assert done == [1,4,2,3,5,6]
+    # Output order is not guaranteed.
+    """
     # TODO Implement with backpressure.
     queue = QueueWithException()
     tasks = [asyncio.create_task(queue.enqueue_iterator(it)) for it in async_iters]
@@ -888,7 +1163,51 @@ async def merge_step(*async_iters: list[AsyncIterator[T]]) -> AsyncIterator[T]:
 async def merge_as_dict_step(
     dict_iters: dict[str, AsyncIterator[Any]]
 ) -> AsyncIterator[dict]:
-    """Takes several iterators and collects each into different keys in a dictionary.  The first in the list driver the output."""
+    """
+    Data flow step that merges multiple streams into a single one that yields dictionaries.
+
+    Each iterator in the input dictionary is associated with a key. The function concurrently consumes
+    items from all iterators and yields dictionaries. Each dictionary contains the most recent item
+    from each iterator, keyed by the respective iterator's key. The output frequency is driven by the
+    first iterator specified in the input dictionary.
+
+    Parameters
+    ----------
+    dict_iters : dict[str, AsyncIterator[Any]]
+        A dictionary mapping keys to asynchronous iterators. The first iterator in the dictionary
+        drives the output frequency.
+
+    Returns
+    -------
+    AsyncIterator[dict]
+        An asynchronous iterator yielding dictionaries. Each dictionary combines the most recent items
+        from each input iterator under their corresponding keys.
+
+    Raises
+    ------
+    ValueError
+        If `dict_iters` is empty.
+
+    Examples
+    --------
+    >>> async def async_iter1():
+    ...     for i in [1,2,3]:
+    ...         await asyncio.sleep(0.3)
+    ...         yield i
+    >>> async def async_iter2():
+    ...     for i in [4,5,6]:
+    ...         await asyncio.sleep(0.5)
+    ...         yield i
+    >>> stream1 = async_iter1()
+    >>> stream2 = async_iter2()
+    >>> stream = merge_as_dict_step({'a':stream1, 'b':stream2})
+    >>> done = await array_sink(stream)
+    >>> assert done == [
+    ...     {'a':1},
+    ...     {'a':2, 'b':4},
+    ...     {'a':3, 'b':4},
+    ... ]
+    """
     # logger.debug(f"merge_as_dict_step")
     if not dict_iters:
         raise ValueError("merge_as_dict_step requires at least on iterator")
@@ -919,8 +1238,37 @@ async def merge_as_dict_step(
 def partition_step(
     async_iter: AsyncIterator[T], condition: Callable[[T], bool]
 ) -> Tuple[AsyncIterator[T], AsyncIterator[T]]:
-    """Partitions a source into two iterators, one where the condition is true and one where it is false.
-    Exceptions are propagated to both iterators."""
+    """
+    Data flow step that partitions items into two output streams based on a specified condition.
+
+    This function divides the items from the input async iterator into two separate iterators: one
+    for items where the condition evaluates to True, and another for items where the condition is False.
+    If an exception occurs during iteration, it is propagated to both output iterators.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An asynchronous iterator whose items are to be partitioned.
+    condition : Callable[[T], bool]
+        A function that evaluates each item in the iterator. Returns True if the item should go to the
+        first iterator, and False for the second.
+
+    Returns
+    -------
+    Tuple[AsyncIterator[T], AsyncIterator[T]]
+        A tuple of two asynchronous iterators: the first yields items where the condition is True,
+        and the second yields items where the condition is False.
+
+    Examples
+    --------
+    >>> stream = array_source(range(4))
+    >>> true_stream, false_stream = partition_step(stream, lambda x: x % 2 == 0)
+    >>> true_done = array_sink(true_stream)
+    >>> false_done = array_sink(false_stream)
+    >>> true_ret, false_ret = await asyncio.gather(true_done, false_done)
+    >>> assert true_ret == [0,2]
+    >>> assert false_ret == [1,3]
+    """
     true_queue = QueueWithException()
     false_queue = QueueWithException()
 
@@ -950,16 +1298,51 @@ def partition_step(
 
 def fork_step(
     async_iter: AsyncIterator[T],
-    backpressure: bool = True,
+    pull_from_all: bool = False,
 ) -> Tuple[AsyncIterator[T], AsyncIterator[T]]:
-    """Forks a stream, splitting a single source into two separate sources.
-    If backpressure is True (the default), then items will only be consumed as fast as the first returned source is consumed,
-    the second source will be rate limited to the first.  If false, items will always be consumed as fast as possible.
+    """
+    Data flow step that splips a stream into two, creating a 'fork' in the stream.
 
-    If backpressure is True, then exceptions will only be propagated to the first iterator.  If False, it will go to both.
+    This function takes an async iterator and divides its output into two separate async iterators.
+    If `pull_from_all` is set to False (default), the consumption rate of items is determined by the
+    rate of consumption of the first returned iterator; the second iterator's output rate will match
+    the first. If `pull_from_all` is True, both iterators will consume items independently as quickly
+    as possible.
+
+    If pull_from_all is False, exceptions will only propagate to the first iterator. If True, exceptions
+    will propagate to both iterators.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        The asynchronous iterator to be forked.
+    pull_from_all : bool, default False
+        If true, both forks will pull form the incoming iterator.  If False, the second iterator will only
+        receive data as fast as the first pulls.
+
+    Returns
+    -------
+    Tuple[AsyncIterator[T], AsyncIterator[T]]
+        A tuple of two asynchronous iterators representing the forked output.
+
+    Examples
+    --------
+    >>> source = array_source(range(2))
+    >>> a, b = fork_step(source)
+    >>> a = await array_sink(a)
+    >>> b = await array_sink(b)
+    >>> assert a == [0, 1]
+    >>> assert b == [0, 1]
+
+    Notes
+    -----
+    - With pull_from_all set to False, the rate of iteration in the first iterator controls the overall
+      pace of item consumption from the original iterator.
+    - With pull_from_all set to True, items are consumed from the original iterator as quickly as possible,
+      and both iterators receive items independently.
     """
 
-    def with_backpressure():
+    def no_pull_from_all():
         right_queue = asyncio.Queue()
         right_iterator = queue_source(right_queue)
 
@@ -973,7 +1356,7 @@ def fork_step(
         left_iterator = consume_and_queue()
         return left_iterator, right_iterator
 
-    def no_backpressure():
+    def with_pull_from_all():
         left_queue = QueueWithException()
         right_queue = QueueWithException()
 
@@ -995,15 +1378,46 @@ def fork_step(
 
         return left_iterator, right_iterator
 
-    iterators = with_backpressure() if backpressure else no_backpressure()
+    iterators = with_pull_from_all() if pull_from_all else no_pull_from_all()
     return iterators
 
 
 def buffer_step(
-    async_iter: AsyncIterator[T], join_func: Callable[[T], T]
+    async_iter: AsyncIterator[T], join_func: Callable[[List[T]], T]
 ) -> AsyncIterator[T]:
-    """Acts as a buffer that can receive multiple byte messages and aggregates them on the way out."""
+    """
+    Data flow step that buffers and aggregates items them before yielding.
+
+    This function acts as a buffer.  It pulls items from the incoming iterator as fast as they can come in, and
+    then outputs aggreged items only as fast as the output iterator can pull them.  The aggregation is performed using a
+    specified join function.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        The asynchronous iterator to buffer from.
+    join_func : Callable[[List[T]], T]
+        A function that takes a list of items and returns an aggregated result.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator that yields aggregated items.
+
+    Examples
+    --------
+    >>> async def rate_limit_sink(ai):
+    ...     out = []
+    ...     async for item in ai:
+    ...         await asyncio.sleep(0.1)
+    ...         out.append(item)
+    >>> stream = array_source(['a','b','c','d'])
+    >>> stream = buffer_step(stream, lambda x:  ''.join(x))
+    >>> done = await rate_limit_sink(stream)
+    >>> assert done == ['abcd']
+    """
     queue = QueueWithException()
+    task = asyncio.create_task(queue.enqueue_iterator(async_iter))
 
     async def make_iterator() -> AsyncIterator[T]:
         ongoing = True
@@ -1014,33 +1428,91 @@ def buffer_step(
             try:
                 item = await queue.get()
                 if item == EndOfStreamMarker:
-                    # logger.info(f"None was on top of queue")
+                    # logger.debug(f"End of queue")
                     return
                 data = [item]
             except asyncio.CancelledError:
-                # logger.info(f"ByteBuffer cancelled")
+                # logger.debug(f"ByteBuffer cancelled")
                 return
             # Now consume whatever other data's still buffered.
             while True:
                 try:
                     chunk = queue.get_nowait()
                     if chunk == EndOfStreamMarker:
-                        # logger.info(f"Got None in nowait")
+                        # logger.debug(f"Got None in nowait")
                         ongoing = False
                         break
                     data.append(chunk)
                 except QueueEmpty:
-                    # logger.info(f"Got QueueEmpty in nowait")
+                    # logger.debug(f"Got QueueEmpty in nowait")
                     break
-            yield join_func(data)
+            out = join_func(data)
+            # logger.debug(f"Joining {data} {out}")
+            yield out
+        task.cancel()
 
-    asyncio.create_task(queue.enqueue_iterator(async_iter))
     return make_iterator()
 
 
 def byte_buffer_step(async_iter: AsyncIterator[bytes]) -> AsyncIterator[bytes]:
+    """
+    Data flow step that buffers and aggregates byte sequences to match producer and consumer rates.
+
+    This function acts as a buffer specifically for byte streams.  It pulls bytes from the incoming iterator as fast
+     as they can come in, and then outputs aggreged byte buffers only as fast as the output iterator can pull them.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator yielding byte sequences.
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        An asynchronous iterator yielding concatenated byte sequences.
+
+    Examples
+    --------
+    >>> async def rate_limit_sink(ai):
+    ...     out = []
+    ...     async for item in ai:
+    ...         await asyncio.sleep(0.5)
+    ...         out.append(item)
+    >>> stream = array_source([b'a',b'b',b'c',b'd'])
+    >>> stream = byte_buffer_step(stream)
+    >>> done = await rate_limit_sink(stream)
+    >>> assert done == [b'abcd']
+    """
     return buffer_step(async_iter, lambda x: b"".join(x))
 
 
 def str_buffer_step(async_iter: AsyncIterator[str]) -> AsyncIterator[str]:
+    """
+    Data flow step that buffers and aggregates text strings to match producer and consumer rates.
+
+    This function acts as a buffer specifically for text string.  It pulls text from the incoming iterator as fast
+     as it can come in, and then outputs concatenated text only as fast as the output iterator can pull.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[bytes]
+        An asynchronous iterator yielding text.
+
+    Returns
+    -------
+    AsyncIterator[bytes]
+        An asynchronous iterator yielding concatenated text.
+
+    Examples
+    --------
+    >>> async def rate_limit_sink(ai):
+    ...     out = []
+    ...     async for item in ai:
+    ...         await asyncio.sleep(0.5)
+    ...         out.append(item)
+    >>> stream = array_source(['a','b','c','d'])
+    >>> stream = str_buffer_step(stream)
+    >>> done = await rate_limit_sink(stream)
+    >>> assert done == ['abcd']
+    """
     return buffer_step(async_iter, lambda x: "".join(x))

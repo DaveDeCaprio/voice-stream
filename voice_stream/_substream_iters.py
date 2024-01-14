@@ -28,8 +28,8 @@ class SimpleFlow(AsyncIterator):
 
     def flow_for_output(self, ix: int):
         def output_wrapper(async_iter: AsyncIterator[T]):
-            ret = self.__call__(async_iter)
-            return ret[ix]
+            out = self.__call__(async_iter)
+            return out[ix]
 
         return output_wrapper
 
@@ -78,9 +78,9 @@ class ResettableIterator(AsyncIterator):
             raise StopAsyncIteration
         assert reset_task in pending and self.next_item_task in done
         reset_task.cancel()
-        ret = await self.next_item_task
+        out = await self.next_item_task
         self.next_item_task = None
-        return ret
+        return out
 
     def reset(self):
         self.reset_flag.set()

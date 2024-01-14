@@ -57,19 +57,19 @@ class QueueWithException(asyncio.Queue):
         await self.put(EndOfStreamMarker)
 
     async def get(self):
-        ret = await super().get()
-        return self._handle_get(ret)
+        out = await super().get()
+        return self._handle_get(out)
 
     def get_nowait(self):
-        ret = super().get_nowait()
-        return self._handle_get(ret)
+        out = super().get_nowait()
+        return self._handle_get(out)
 
-    def _handle_get(self, ret):
-        if ret == EndOfStreamMarker and self.exception:
+    def _handle_get(self, out):
+        if out == EndOfStreamMarker and self.exception:
             exception = self.exception
             self.exception = None
             raise exception
-        return ret
+        return out
 
     def set_exception(self, exception: Exception):
         """Sets an exception to be propagated to consumers.

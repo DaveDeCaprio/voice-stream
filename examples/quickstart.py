@@ -62,20 +62,22 @@ chain = (
 # 4 - The VoiceStream data flow to run the voice chat
 @app.websocket("/ws/audio")
 async def audio_websocket_endpoint(websocket: WebSocket):
-    pipe = fastapi_websocket_bytes_source(websocket)
-    pipe = google_speech_v1_step(
-        pipe,
+    stream = fastapi_websocket_bytes_source(websocket)
+    stream = google_speech_v1_step(
+        stream,
         speech_async_client,
         audio_format=AudioFormat.WEBM_OPUS,
     )
-    pipe = log_step(pipe, "Recognized speech")
-    pipe = map_step(pipe, lambda x: {"query": x})
-    pipe = langchain_step(pipe, chain, on_completion="")
-    pipe = recover_exception_step(
-        pipe, Exception, lambda x: "Google blocked the response.  Ending conversation."
+    stream = log_step(stream, "Recognized speech")
+    stream = map_step(stream, lambda x: {"query": x})
+    stream = langchain_step(stream, chain, on_completion="")
+    stream = recover_exception_step(
+        stream,
+        Exception,
+        lambda x: "Google blocked the response.  Ending conversation.",
     )
-    pipe = google_text_to_speech_step(
-        pipe, text_to_speech_async_client, audio_format=AudioFormat.MP3
+    stream = google_text_to_speech_step(
+        stream, text_to_speech_async_client, audio_format=AudioFormat.MP3
     )
-    pipe = map_step(pipe, lambda x: x.audio)
-    await fastapi_websocket_bytes_sink(pipe, websocket)
+    stream = map_step(stream, lambda x: x.audio)
+    await fastapi_websocket_bytes_sink(stream, websocket)

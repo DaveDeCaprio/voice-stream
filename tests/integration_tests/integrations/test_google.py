@@ -3,18 +3,11 @@ import os
 
 import pytest
 from google.api_core.client_options import ClientOptions
-from google.cloud.speech_v2 import SpeechAsyncClient
 from google.cloud.speech_v1 import SpeechAsyncClient as SpeechAsyncClientV1
+from google.cloud.speech_v2 import SpeechAsyncClient
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
 
 from tests.helpers import assert_files_equal, example_file
-from voice_stream.audio import (
-    wav_mulaw_file_source,
-    wav_mulaw_file_sink,
-    AudioFormat,
-    ogg_page_separator_step,
-    ogg_concatenator_step,
-)
 from voice_stream import (
     array_sink,
     array_source,
@@ -22,6 +15,13 @@ from voice_stream import (
     binary_file_sink,
     log_step,
     map_step,
+)
+from voice_stream.audio import (
+    wav_mulaw_file_source,
+    wav_mulaw_file_sink,
+    AudioFormat,
+    ogg_page_separator_step,
+    ogg_concatenator_step,
 )
 from voice_stream.events import SpeechStart, SpeechEnd
 from voice_stream.integrations.google import (
@@ -41,10 +41,10 @@ async def test_google_speech():
     project = os.environ["GCP_PROJECT_ID"]
     location = os.environ["GCP_SPEECH_LOCATION"]
     recognizer = os.environ["GCP_TELEPHONE_SPEECH_RECOGNIZER"]
-    pipe = wav_mulaw_file_source(example_file("testing.wav"))
+    stream = wav_mulaw_file_source(example_file("testing.wav"))
     logger.info(f"Recognizer is {recognizer}")
-    pipe = google_speech_step(
-        pipe,
+    stream = google_speech_step(
+        stream,
         speech_async_client,
         project=project,
         location=location,
@@ -53,8 +53,8 @@ async def test_google_speech():
         language_codes=["en-US", "es-US"],
         audio_format=AudioFormat.WAV_MULAW_8KHZ,
     )
-    ret = await array_sink(pipe)
-    assert ret == ["testing 1 2 3 testing 1 2 3"]
+    out = await array_sink(stream)
+    assert out == ["testing 1 2 3 testing 1 2 3"]
 
 
 @pytest.mark.asyncio
@@ -65,17 +65,17 @@ async def test_google_speech_browser():
     project = os.environ["GCP_PROJECT_ID"]
     location = os.environ["GCP_SPEECH_LOCATION"]
     recognizer = os.environ["GCP_BROWSER_SPEECH_RECOGNIZER"]
-    pipe = binary_file_source(example_file("testing.webm"), chunk_size=65536)
+    stream = binary_file_source(example_file("testing.webm"), chunk_size=65536)
     logger.info(f"Recognizer is {recognizer}")
-    pipe = google_speech_step(
-        pipe,
+    stream = google_speech_step(
+        stream,
         speech_async_client,
         project=project,
         location=location,
         recognizer=recognizer,
     )
-    ret = await array_sink(pipe)
-    assert ret == ["start browser bass call"]
+    out = await array_sink(stream)
+    assert out == ["start browser bass call"]
 
 
 @pytest.mark.asyncio
@@ -86,9 +86,9 @@ async def test_google_speech_with_events():
     project = os.environ["GCP_PROJECT_ID"]
     location = os.environ["GCP_SPEECH_LOCATION"]
     recognizer = os.environ["GCP_TELEPHONE_SPEECH_RECOGNIZER"]
-    pipe = wav_mulaw_file_source(example_file("testing.wav"))
-    pipe, events = google_speech_step(
-        pipe,
+    stream = wav_mulaw_file_source(example_file("testing.wav"))
+    stream, events = google_speech_step(
+        stream,
         speech_async_client,
         project,
         location,
@@ -98,10 +98,10 @@ async def test_google_speech_with_events():
         audio_format=AudioFormat.WAV_MULAW_8KHZ,
         include_events=True,
     )
-    ret = await array_sink(pipe)
+    out = await array_sink(stream)
     events = await array_sink(events)
     logger.info(events)
-    assert ret == ["testing 1 2 3 testing 1 2 3"]
+    assert out == ["testing 1 2 3 testing 1 2 3"]
     assert events == [
         SpeechStart(1.29),
         SpeechEnd(4.5),
@@ -113,14 +113,14 @@ async def test_google_speech_browser_v1():
     speech_async_client = SpeechAsyncClientV1(
         client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
     )
-    pipe = binary_file_source(example_file("testing.webm"), chunk_size=65536)
-    pipe = google_speech_v1_step(
-        pipe,
+    stream = binary_file_source(example_file("testing.webm"), chunk_size=65536)
+    stream = google_speech_v1_step(
+        stream,
         speech_async_client,
         audio_format=AudioFormat.WEBM_OPUS,
     )
-    ret = await array_sink(pipe)
-    assert ret == ["Start browser-based call."]
+    out = await array_sink(stream)
+    assert out == ["Start browser-based call."]
 
 
 @pytest.mark.asyncio
@@ -128,19 +128,19 @@ async def test_google_speech_v1_with_events():
     speech_async_client = SpeechAsyncClientV1(
         client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
     )
-    pipe = wav_mulaw_file_source(example_file("testing.wav"))
-    pipe, events = google_speech_v1_step(
-        pipe,
+    stream = wav_mulaw_file_source(example_file("testing.wav"))
+    stream, events = google_speech_v1_step(
+        stream,
         speech_async_client,
         model="telephony",
         language_code="en-US",
         audio_format=AudioFormat.WAV_MULAW_8KHZ,
         include_events=True,
     )
-    ret = await array_sink(pipe)
+    out = await array_sink(stream)
     events = await array_sink(events)
     logger.info(events)
-    assert ret == ["Testing 1 2 3 testing 1 2 3."]
+    assert out == ["Testing 1 2 3 testing 1 2 3."]
     assert events == [
         SpeechStart(1.38),
         SpeechEnd(4.46),
@@ -149,47 +149,47 @@ async def test_google_speech_v1_with_events():
 
 @pytest.mark.asyncio
 async def test_google_text_to_speech(tmp_path):
-    pipe = array_source(
+    stream = array_source(
         ["Hello world", "Longer second utterance that drags on a bit and keeps going"]
     )
     text_to_speech_async_client = TextToSpeechAsyncClient()
-    pipe = google_text_to_speech_step(
-        pipe, text_to_speech_async_client, audio_format=AudioFormat.WAV_MULAW_8KHZ
+    stream = google_text_to_speech_step(
+        stream, text_to_speech_async_client, audio_format=AudioFormat.WAV_MULAW_8KHZ
     )
-    pipe = map_step(pipe, lambda x: x.audio)
+    stream = map_step(stream, lambda x: x.audio)
     target = tmp_path.joinpath("tts.wav")
-    ret = await wav_mulaw_file_sink(pipe, target)
+    out = await wav_mulaw_file_sink(stream, target)
     assert_files_equal(example_file("tts.wav"), target, mode="b")
 
 
 @pytest.mark.asyncio
 async def test_google_text_to_speech_ogg(tmp_path):
-    pipe = array_source(
+    stream = array_source(
         ["Hello world", "Longer second utterance that drags on a bit and keeps going"]
     )
     text_to_speech_async_client = TextToSpeechAsyncClient()
-    pipe = google_text_to_speech_step(
-        pipe, text_to_speech_async_client, audio_format=AudioFormat.OGG_OPUS
+    stream = google_text_to_speech_step(
+        stream, text_to_speech_async_client, audio_format=AudioFormat.OGG_OPUS
     )
-    pipe = map_step(pipe, lambda x: x.audio)
-    pipe = log_step(pipe, "ogg", formatter=lambda x: f"{len(x)} bytes")
-    pipe = ogg_page_separator_step(pipe)
-    pipe = ogg_concatenator_step(pipe)
+    stream = map_step(stream, lambda x: x.audio)
+    stream = log_step(stream, "ogg", formatter=lambda x: f"{len(x)} bytes")
+    stream = ogg_page_separator_step(stream)
+    stream = ogg_concatenator_step(stream)
     target = tmp_path.joinpath("tts.ogg")
-    await binary_file_sink(pipe, target)
+    await binary_file_sink(stream, target)
     assert_files_equal(example_file("tts.ogg"), target, mode="b")
 
 
 @pytest.mark.asyncio
 async def test_google_text_to_speech_mp3(tmp_path):
-    pipe = array_source(
+    stream = array_source(
         ["Hello world", "Longer second utterance that drags on a bit and keeps going"]
     )
     text_to_speech_async_client = TextToSpeechAsyncClient()
-    pipe = google_text_to_speech_step(
-        pipe, text_to_speech_async_client, audio_format=AudioFormat.MP3
+    stream = google_text_to_speech_step(
+        stream, text_to_speech_async_client, audio_format=AudioFormat.MP3
     )
-    pipe = map_step(pipe, lambda x: x.audio)
+    stream = map_step(stream, lambda x: x.audio)
     target = tmp_path.joinpath("tts.mp3")
-    await binary_file_sink(pipe, target)
+    await binary_file_sink(stream, target)
     assert_files_equal(example_file("tts.mp3"), target, mode="b")

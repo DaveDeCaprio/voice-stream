@@ -15,10 +15,10 @@ async def test_timed_text_rate_limit_step():
         yield SpeechStart(time_since_start=2)
         await asyncio.sleep(0.5)
 
-    pipe = gen()
-    pipe = filter_spurious_speech_start_events_step(pipe, 0.2)
-    ret = await array_sink(pipe)
-    assert ret == [SpeechStart(time_since_start=2)]
+    stream = gen()
+    stream = filter_spurious_speech_start_events_step(stream, 0.2)
+    out = await array_sink(stream)
+    assert out == [SpeechStart(time_since_start=2)]
 
 
 @pytest.mark.asyncio
@@ -29,7 +29,7 @@ async def test_timed_text_rate_limit_step_with_cancel():
         yield SpeechEnd(time_since_start=2)
         await asyncio.sleep(0.3)
 
-    pipe = gen()
-    pipe = filter_spurious_speech_start_events_step(pipe, 0.2)
-    ret = await array_sink(pipe)
-    assert ret == []
+    stream = gen()
+    stream = filter_spurious_speech_start_events_step(stream, 0.2)
+    out = await array_sink(stream)
+    assert out == []

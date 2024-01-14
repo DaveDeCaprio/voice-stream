@@ -43,18 +43,18 @@
 #         def read(self, size):
 #             while True:
 #                 if len(self.buffer) >= size:
-#                     ret = self.buffer[:size]
+#                     out = self.buffer[:size]
 #                     self.buffer = self.buffer[size:]
-#                     return ret
+#                     return out
 #                 else:
 #                     try:
 #                         # Schedule the async function on the event loop and wait for the result
 #                         future = asyncio.run_coroutine_threadsafe(self.iter.__anext__(), self.loop)
 #                         self.buffer += future.result()  # This blocks the thread until the coroutine is done
 #                     except StopAsyncIteration:
-#                         ret = self.buffer
+#                         out = self.buffer
 #                         self.buffer = b''
-#                         return ret
+#                         return out
 #
 #         def blocking_recognize(self):
 #             r = sr.Recognizer()
@@ -62,6 +62,6 @@
 #             f = getattr(r, recognition_function)
 #             return f(audio, **recognition_kwargs)
 #
-#     pipe = chunk_bytes_step(async_iter, chunk_size)
-#     return _AsyncPythonSpeechRecIter(pipe)
+#     stream = chunk_bytes_step(async_iter, chunk_size)
+#     return _AsyncPythonSpeechRecIter(stream)
 #

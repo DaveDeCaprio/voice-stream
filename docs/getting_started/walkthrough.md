@@ -87,7 +87,7 @@ We'll walk through this code in more detail.  Let's go line by line.
 :lines: 1-3
 :emphasize-lines: 3
 ```
-First we set up the source using {py:func}`~voice_stream.integrations.fastapi.fastapi_websocket_bytes_source`.  This creates the pipe and returns an AsyncIterator[bytes] which will contain the audio data.
+First we set up the source using {py:func}`~voice_stream.integrations.fastapi.fastapi_websocket_bytes_source`.  This creates the stream and returns an AsyncIterator[bytes] which will contain the audio data.
 
 #### Speech Recognition
 
@@ -124,7 +124,7 @@ easy to watch and verify that the speech is understood correctly.
 :emphasize-lines: 10
 ```
 
-The LangChain we have created expects input in the form of a dictionary, but what's being passed down the pipe right now is a string.  
+The LangChain we have created expects input in the form of a dictionary, but what's being passed down the stream right now is a string.  
 We use a {py:func}`~voice_stream.map_step` to format the string into the dictionary format that the LangChain expects.
 
 ```{literalinclude} ../../examples/quickstart.py
@@ -135,7 +135,7 @@ We use a {py:func}`~voice_stream.map_step` to format the string into the diction
 ```
 
 The {py:func}`~voice_stream.integrations.langchain.langchain_step` runs the chain we created above.  This step uses 
-streaming mode by default, so it is capable of outputting a token at a time down the pipe.  `ChatVertexAI` doesn't 
+streaming mode by default, so it is capable of outputting a token at a time down the stream.  `ChatVertexAI` doesn't 
 currently support this mode though, so that output will come out all at once.  This creates a longer delay between the 
 end of you speaking and the start of the response.  In production applications, you wil probably want to use an LLM that
 supports streaming tokens.
@@ -150,7 +150,7 @@ The output of this step is an AsyncIterator[str] with the response from the LLM.
 ```
 
 The {py:func}`~voice_stream.recover_exception_step` handles the case where for some reason the LLM blocks your response
-and doesn't return a value.  In that case, an exception is thrown, which propagates down the pipe the say way normal data does.
+and doesn't return a value.  In that case, an exception is thrown, which propagates down the stream the say way normal data does.
 In this case, we recover from that exception by passing new text, which will tell the user about the error.
 
 #### Text-to-Speech
@@ -185,7 +185,7 @@ the next block.
 Finally, the audio data is sent back to the browser for playback using an {py:func}`~voice_stream.integrations.fastapi.fastapi_websocket_bytes_sink`.
 
 Note that on the last line we `await` the sink.  The sink will not actually complete until the websocket is closed.  Data
-will keep flowing through the pipe as long as it is open.  This allows us to have many rounds of recognizing speech and
+will keep flowing through the stream as long as it is open.  This allows us to have many rounds of recognizing speech and
 returning responses all within the same flow.
 
 ## Where To Go Now

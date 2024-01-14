@@ -15,28 +15,28 @@ from voice_stream.integrations.twilio import (
 
 @pytest.mark.asyncio
 async def test_twilio_sequence_correct():
-    pipe = text_file_source(example_file("echo.ndjson"))
-    pipe = map_str_to_json_step(pipe)
-    pipe = twilio_check_sequence_step(pipe)
-    result = await array_sink(pipe)
+    stream = text_file_source(example_file("echo.ndjson"))
+    stream = map_str_to_json_step(stream)
+    stream = twilio_check_sequence_step(stream)
+    result = await array_sink(stream)
     assert len(result) == 3
 
 
 @pytest.mark.asyncio
 async def test_twilio_sequence_incorrect():
-    pipe = text_file_source(example_file("echo.ndjson"))
-    pipe = map_str_to_json_step(pipe)
-    pipe = filter_step(pipe, lambda x: x["sequenceNumber"] != 2)
-    pipe = twilio_check_sequence_step(pipe)
+    stream = text_file_source(example_file("echo.ndjson"))
+    stream = map_str_to_json_step(stream)
+    stream = filter_step(stream, lambda x: x["sequenceNumber"] != 2)
+    stream = twilio_check_sequence_step(stream)
     with pytest.raises(ValueError):
-        await array_sink(pipe)
+        await array_sink(stream)
 
 
 @pytest.mark.asyncio
 async def test_twilio_media():
-    pipe = text_file_source(example_file("echo.ndjson"))
-    pipe = map_str_to_json_step(pipe)
-    media, control = twilio_split_media_step(pipe)
+    stream = text_file_source(example_file("echo.ndjson"))
+    stream = map_str_to_json_step(stream)
+    media, control = twilio_split_media_step(stream)
     media = await array_sink(media)
     control = await array_sink(control)
     assert media == [

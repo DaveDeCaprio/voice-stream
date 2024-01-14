@@ -4,6 +4,13 @@ from typing import AsyncIterator, Union
 
 import asyncstdlib
 from google.api_core.exceptions import Aborted
+from google.cloud.speech_v1 import (
+    SpeechAsyncClient as SpeechAsyncClientV1,
+    StreamingRecognizeRequest as StreamingRecognizeRequestV1,
+    StreamingRecognizeResponse as StreamingRecognizeResponseV1,
+    StreamingRecognitionConfig as StreamingRecognitionConfigV1,
+    RecognitionConfig as RecognitionConfigV1,
+)
 from google.cloud.speech_v2 import (
     StreamingRecognizeRequest,
     StreamingRecognitionConfig,
@@ -12,16 +19,6 @@ from google.cloud.speech_v2 import (
     StreamingRecognizeResponse,
     RecognitionConfig,
 )
-
-from google.cloud.speech_v1 import (
-    SpeechAsyncClient as SpeechAsyncClientV1,
-    StreamingRecognizeRequest as StreamingRecognizeRequestV1,
-    StreamingRecognizeResponse as StreamingRecognizeResponseV1,
-    StreamingRecognitionConfig as StreamingRecognitionConfigV1,
-    RecognitionConfig as RecognitionConfigV1,
-)
-
-
 from google.cloud.texttospeech_v1 import (
     TextToSpeechAsyncClient,
     SynthesizeSpeechRequest,
@@ -31,7 +28,7 @@ from google.cloud.texttospeech_v1 import (
     AudioEncoding,
 )
 
-from voice_stream.audio.audio import remove_wav_header, AudioFormat
+from voice_stream.audio.audio_ops import remove_wav_header, AudioFormat
 from voice_stream.core import (
     map_step,
     filter_step,
@@ -39,7 +36,7 @@ from voice_stream.core import (
     concat_step,
     byte_buffer_step,
     chunk_bytes_step,
-    exception_handler_step,
+    recover_exception_step,
     partition_step,
     async_init_step,
 )
@@ -112,13 +109,13 @@ def google_speech_step(
     If include_events is True, a second stream will be returned containing speech events.
     """
     MAX_STREAM_SIZE = 25600
-    pipe = async_iter
-    # pipe = count_step(pipe, "pre")
-    pipe = byte_buffer_step(pipe)
-    pipe = chunk_bytes_step(pipe, MAX_STREAM_SIZE)
-    # pipe = count_step(pipe, "post")
-    pipe = map_step(
-        pipe, lambda x: StreamingRecognizeRequest(recognizer=recognizer, audio=x)
+    stream = async_iter
+    # stream = count_step(stream, "pre")
+    stream = byte_buffer_step(stream)
+    stream = chunk_bytes_step(stream, MAX_STREAM_SIZE)
+    # stream = count_step(stream, "post")
+    stream = map_step(
+        stream, lambda x: StreamingRecognizeRequest(recognizer=recognizer, audio=x)
     )
     config = array_source(
         [
@@ -133,13 +130,13 @@ def google_speech_step(
             )
         ]
     )
-    pipe = concat_step(config, pipe)
-    pipe = async_init_step(pipe, speech_async_client.streaming_recognize)
-    pipe = exception_handler_step(
-        pipe, Aborted, lambda x: logger.info("Google Recognize aborted.")
+    stream = concat_step(config, stream)
+    stream = async_init_step(stream, speech_async_client.streaming_recognize)
+    stream = recover_exception_step(
+        stream, Aborted, lambda x: logger.info("Google Recognize aborted.")
     )
-    # pipe = filter_step(pipe, lambda x: x.results[0].is_final)
-    # pipe = log_step(pipe, "google_speech")
+    # stream = filter_step(stream, lambda x: x.results[0].is_final)
+    # stream = log_step(stream, "google_speech")
 
     def get_transcript(result):
         if not result.results:
@@ -151,18 +148,18 @@ def google_speech_step(
         return result.results[0].alternatives[0].transcript
 
     if include_events:
-        pipe, events = partition_step(pipe, lambda x: x.results)
-        # pipe = log_step(pipe, "google_partition")
-    pipe = map_step(pipe, get_transcript)
-    # pipe = log_step(pipe, "get_transcript")
-    pipe = filter_step(pipe, lambda x: len(x) > 0)
+        stream, events = partition_step(stream, lambda x: x.results)
+        # stream = log_step(stream, "google_partition")
+    stream = map_step(stream, get_transcript)
+    # stream = log_step(stream, "get_transcript")
+    stream = filter_step(stream, lambda x: len(x) > 0)
     if include_events:
         events = map_step(events, _map_speech_events)
         events = filter_step(events, lambda x: x is not None)
-        # pipe = log_step(pipe, "Google out")
-        return pipe, events
+        # stream = log_step(stream, "Google out")
+        return stream, events
     else:
-        return pipe
+        return stream
 
 
 def google_speech_v1_step(
@@ -177,10 +174,10 @@ def google_speech_v1_step(
     If include_events is True, a second stream will be returned containing speech events.
     """
     MAX_STREAM_SIZE = 25600
-    pipe = async_iter
-    pipe = byte_buffer_step(pipe)
-    pipe = chunk_bytes_step(pipe, MAX_STREAM_SIZE)
-    pipe = map_step(pipe, lambda x: StreamingRecognizeRequestV1(audio_content=x))
+    stream = async_iter
+    stream = byte_buffer_step(stream)
+    stream = chunk_bytes_step(stream, MAX_STREAM_SIZE)
+    stream = map_step(stream, lambda x: StreamingRecognizeRequestV1(audio_content=x))
     config = array_source(
         [
             _initial_recognition_config_v1(
@@ -191,13 +188,13 @@ def google_speech_v1_step(
             )
         ]
     )
-    pipe = concat_step(config, pipe)
-    pipe = async_init_step(pipe, speech_async_client.streaming_recognize)
-    pipe = exception_handler_step(
-        pipe, Aborted, lambda x: logger.info("Google Recognize aborted.")
+    stream = concat_step(config, stream)
+    stream = async_init_step(stream, speech_async_client.streaming_recognize)
+    stream = recover_exception_step(
+        stream, Aborted, lambda x: logger.info("Google Recognize aborted.")
     )
-    # pipe = filter_step(pipe, lambda x: x.results[0].is_final)
-    # pipe = log_step(pipe, "google_speech")
+    # stream = filter_step(stream, lambda x: x.results[0].is_final)
+    # stream = log_step(stream, "google_speech")
 
     def get_transcript(result):
         if not result.results:
@@ -209,18 +206,18 @@ def google_speech_v1_step(
         return result.results[0].alternatives[0].transcript
 
     if include_events:
-        pipe, events = partition_step(pipe, lambda x: x.results)
-        # pipe = log_step(pipe, "google_partition")
-    pipe = map_step(pipe, get_transcript)
-    # pipe = log_step(pipe, "get_transcript")
-    pipe = filter_step(pipe, lambda x: len(x) > 0)
+        stream, events = partition_step(stream, lambda x: x.results)
+        # stream = log_step(stream, "google_partition")
+    stream = map_step(stream, get_transcript)
+    # stream = log_step(stream, "get_transcript")
+    stream = filter_step(stream, lambda x: len(x) > 0)
     if include_events:
         events = map_step(events, _map_speech_events_v1)
         events = filter_step(events, lambda x: x is not None)
-        # pipe = log_step(pipe, "Google out")
-        return pipe, events
+        # stream = log_step(stream, "Google out")
+        return stream, events
     else:
-        return pipe
+        return stream
 
 
 def _map_speech_events(input):
@@ -275,7 +272,7 @@ def _initial_recognition_config(
     auto_decoding, explicit_decoding = resolve_audio_decoding(audio_format)
 
     # noinspection PyTypeChecker
-    ret = StreamingRecognizeRequest(
+    out = StreamingRecognizeRequest(
         recognizer=recognizer_path,
         streaming_config=StreamingRecognitionConfig(
             config=RecognitionConfig(
@@ -293,8 +290,8 @@ def _initial_recognition_config(
             ),
         ),
     )
-    # logger.debug(f"Initial recognition config: {ret}")
-    return ret
+    # logger.debug(f"Initial recognition config: {out}")
+    return out
 
 
 def _initial_recognition_config_v1(
@@ -320,7 +317,7 @@ def _initial_recognition_config_v1(
         assert False, f"Unsupported audio format {audio_format}"
 
     # noinspection PyTypeChecker
-    ret = StreamingRecognizeRequestV1(
+    out = StreamingRecognizeRequestV1(
         streaming_config=StreamingRecognitionConfigV1(
             config=RecognitionConfigV1(
                 encoding=encoding,
@@ -334,8 +331,8 @@ def _initial_recognition_config_v1(
             enable_voice_activity_events=include_events,
         ),
     )
-    # logger.debug(f"Initial recognition config: {ret}")
-    return ret
+    # logger.debug(f"Initial recognition config: {out}")
+    return out
 
 
 def _map_speech_events_v1(input):

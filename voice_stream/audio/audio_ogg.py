@@ -4,8 +4,6 @@ import dataclasses
 import logging
 import struct
 
-from voice_stream.audio import AudioFormatError
-
 logger = logging.getLogger(__name__)
 
 
@@ -44,6 +42,8 @@ class OggPage:
 
     @classmethod
     def from_data(cls, data: bytes, offset: int):
+        from voice_stream.audio.audio_utils import AudioFormatError
+
         # OGG page header structure:
         # 0-3 bytes: capture pattern (OggS)
         # 4 byte: stream structure version
@@ -192,6 +192,8 @@ class OpusIdPacket:
 
     @classmethod
     def from_data(cls, data: bytes, offset: int) -> OpusIdPacket:
+        from voice_stream.audio.audio_utils import AudioFormatError
+
         header = data[offset : offset + 8]
         if header != b"OpusHead":
             raise AudioFormatError(

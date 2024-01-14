@@ -91,16 +91,16 @@ def map_future(f: Future[T], func: Callable[[T], Output]) -> Future[Output]:
     >>> count_words("text.txt")
     """
     loop = asyncio.get_running_loop()
-    ret = loop.create_future()
+    out = loop.create_future()
 
     def callback(fut: Future[T]) -> None:
         try:
-            ret.set_result(func(fut.result()))
+            out.set_result(func(fut.result()))
         except Exception as e:
-            ret.set_exception(e)
+            out.set_exception(e)
 
     f.add_done_callback(callback)
-    return ret
+    return out
 
 
 async def resolve_awaitable_or_obj(obj: AwaitableOrObj[T]) -> T:

@@ -16,10 +16,10 @@ SpeechStep = Callable[
 def speech_with_start_detection_step(
     async_iter: AsyncIterator[bytes], speech_step: SpeechStep
 ):
-    pipe, speech_events = speech_step(async_iter)
+    stream, speech_events = speech_step(async_iter)
     # speech_events = log_step(speech_events, "Speech event")
     speech_start = filter_spurious_speech_start_events_step(speech_events)
-    return pipe, speech_start
+    return stream, speech_start
 
 
 def filter_spurious_speech_start_events_step(
@@ -76,6 +76,6 @@ def filter_spurious_speech_start_events_step(
                     else:
                         logger.info(f"Received unknown speech event, ignoring. {item}")
 
-    pipe = WaitingIterator()
-    pipe = log_step(pipe, "New Speech Detected", lambda x: x.time_since_start)
-    return pipe
+    stream = WaitingIterator()
+    stream = log_step(stream, "New Speech Detected", lambda x: x.time_since_start)
+    return stream

@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import logging
 import string
 import time
@@ -8,25 +7,17 @@ from typing import AsyncIterator, Tuple, Callable, Union
 import asyncstdlib
 from pydantic import BaseModel
 
-from voice_stream.audio import AudioFormat, AudioFormatError
-from voice_stream.audio.audio import (
-    get_audio_length,
-    ogg_page_separator_step,
-    mp3_chunk_step,
-)
+from voice_stream.audio import AudioFormat, get_audio_length, audio_rate_limit_step
 from voice_stream.core import (
-    chunk_bytes_step,
     fork_step,
     map_step,
     extract_value_step,
     AwaitableOrObj,
-    async_init_step,
     str_buffer_step,
     filter_step,
 )
-from voice_stream.types import map_future, resolve_awaitable_or_obj
 from voice_stream.events import TimedText
-from voice_stream.substreams import substream_step
+from voice_stream.types import resolve_awaitable_or_obj
 
 logger = logging.getLogger(__name__)
 
@@ -41,22 +32,22 @@ TextToSpeechStep = Callable[[AsyncIterator[str]], AsyncIterator[AudioWithText]]
 
 
 def buffer_tts_text_step(async_iter: AsyncIterator[str]):
-    pipe = wait_for_punctuation_step(async_iter)
-    pipe = str_buffer_step(pipe)
-    pipe = filter_step(pipe, lambda x: len(x) > 0)
-    return pipe
+    stream = wait_for_punctuation_step(async_iter)
+    stream = str_buffer_step(stream)
+    stream = filter_step(stream, lambda x: len(x) > 0)
+    return stream
 
 
 def tts_with_buffer_and_rate_limit_step(
     async_iter: AsyncIterator[str], tts_step, buffer_seconds: float = 0.5
 ) -> (AsyncIterator[bytes], AsyncIterator[str]):
-    pipe = buffer_tts_text_step(async_iter)
-    pipe = tts_step(pipe)
-    pipe, audio_format_f = extract_value_step(pipe, lambda x: x.audio_format)
-    pipe, text_output = tts_rate_limit_step(
-        pipe, audio_format_f, buffer_seconds=buffer_seconds
+    stream = buffer_tts_text_step(async_iter)
+    stream = tts_step(stream)
+    stream, audio_format_f = extract_value_step(stream, lambda x: x.audio_format)
+    stream, text_output = tts_rate_limit_step(
+        stream, audio_format_f, buffer_seconds=buffer_seconds
     )
-    return pipe, text_output
+    return stream, text_output
 
 
 async def wait_for_punctuation_step(
@@ -88,7 +79,7 @@ def tts_rate_limit_step(
         return TimedText(tts.text, duration_in_seconds=duration)
 
     if include_text_output:
-        audio, text = fork_step(async_iter, backpressure=True)
+        audio, text = fork_step(async_iter, pull_from_all=False)
         text = map_step(text, tts_output_to_timed_text)
         # text = log_step(text, "Timed text in")
         text = timed_text_rate_limit_step(text, buffer_seconds=buffer_seconds)
@@ -104,119 +95,6 @@ def tts_rate_limit_step(
         return audio, text
     else:
         return audio
-
-
-def audio_rate_limit_step(
-    async_iter: AsyncIterator[bytes],
-    audio_format: AwaitableOrObj[AudioFormat],
-    buffer_seconds: float,
-):
-    def init(async_iter, af):
-        if af == AudioFormat.WAV_MULAW_8KHZ:
-            SAMPLE_RATE = 8000
-            audio = chunk_bytes_step(async_iter, int(buffer_seconds * SAMPLE_RATE))
-            audio = raw_audio_rate_limit_step(
-                audio, SAMPLE_RATE, buffer_seconds=buffer_seconds
-            )
-        elif af == AudioFormat.OGG_OPUS:
-            audio = _opus_rate_limit_step(async_iter, buffer_seconds=buffer_seconds)
-        elif af == AudioFormat.MP3:
-            audio = _mp3_rate_limit_step(async_iter, buffer_seconds=buffer_seconds)
-        else:
-            raise AudioFormatError(f"Unsupported audio format: {audio_format}")
-        return audio
-
-    async def async_init(async_iter):
-        af = await resolve_awaitable_or_obj(audio_format)
-        return init(async_iter, af)
-
-    if inspect.isawaitable(audio_format):
-        return async_init_step(async_iter, async_init)
-    else:
-        return init(async_iter, audio_format)
-
-
-def _opus_rate_limit_step(async_iter: AsyncIterator[bytes], buffer_seconds: float):
-    def get_bytes_per_second(data):
-        duration = get_audio_length(AudioFormat.OGG_OPUS, data)
-        length_in_bytes = len(data)
-        return int(length_in_bytes / duration)
-
-    def opus_substream(async_iter: AsyncIterator[bytes]):
-        pipe, bytes_per_second_f = extract_value_step(async_iter, get_bytes_per_second)
-        chunk_size_f = map_future(
-            bytes_per_second_f,
-            lambda bytes_per_second: int(buffer_seconds * bytes_per_second / 2),
-        )
-        pipe = chunk_bytes_step(pipe, chunk_size_f)
-        # pipe = log_step(pipe, "Audio Chunk", lambda x: len(x))
-        pipe = raw_audio_rate_limit_step(
-            pipe, bytes_per_second_f, buffer_seconds=buffer_seconds
-        )
-        pipe = ogg_page_separator_step(pipe)
-        # pipe = log_step(pipe, "Full OGG Page", lambda x: len(x))
-        return pipe
-
-    ret = substream_step(async_iter, opus_substream)
-    return ret
-
-
-def _mp3_rate_limit_step(async_iter: AsyncIterator[bytes], buffer_seconds: float):
-    def get_bytes_per_second(data):
-        seconds = get_audio_length(AudioFormat.MP3, data)
-        length_in_bytes = len(data)
-        return int(length_in_bytes / seconds)
-
-    def mp3_substream(async_iter: AsyncIterator[bytes]):
-        pipe, bytes_per_second_f = extract_value_step(async_iter, get_bytes_per_second)
-        chunk_size_f = map_future(
-            bytes_per_second_f,
-            lambda bytes_per_second: int(buffer_seconds * bytes_per_second / 2),
-        )
-        pipe = mp3_chunk_step(pipe, chunk_size_f)
-        pipe = raw_audio_rate_limit_step(
-            pipe, bytes_per_second_f, buffer_seconds=buffer_seconds
-        )
-        return pipe
-
-    ret = substream_step(async_iter, mp3_substream)
-    return ret
-
-
-async def raw_audio_rate_limit_step(
-    async_iter: AsyncIterator[bytes],
-    bytes_per_second: AwaitableOrObj[int],
-    buffer_seconds: AwaitableOrObj[float],
-) -> AsyncIterator[bytes]:
-    """Limits the rate of sending audio bytes down the pipe.  Note that this step always sends a full chunk.
-    buffer_seconds is the number of seconds of audio left before we send the next chunk.  Usually, you will want to put
-    a max size chunk step in before this.  buffer_seconds should be large enough to make sure the send executes.
-    """
-    last_send = time.perf_counter()
-    queued_audio_seconds = 0
-
-    def compute_remaining(now):
-        # Compute the amount of audio remaining to be played in seconds.
-        return max(0, queued_audio_seconds - (now - last_send))
-
-    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
-        async for item in owned_aiter:
-            resolved_buffer_seconds = await resolve_awaitable_or_obj(buffer_seconds)
-            now = time.perf_counter()
-            # Compute the amount of audio remaining to be played in seconds.
-            remaining_audio_seconds = compute_remaining(now)
-            # If we have more than the buffer, sleep until we hit the buffer limit
-            if remaining_audio_seconds > resolved_buffer_seconds:
-                await asyncio.sleep(remaining_audio_seconds - resolved_buffer_seconds)
-                # We don't know how long we actually slept.
-                now = time.perf_counter()
-                remaining_audio_seconds = compute_remaining(now)
-            resolved_bytes_per_second = await resolve_awaitable_or_obj(bytes_per_second)
-            queued_audio_seconds = (
-                remaining_audio_seconds + len(item) / resolved_bytes_per_second
-            )
-            last_send = now
-            yield item
 
 
 async def timed_text_rate_limit_step(
