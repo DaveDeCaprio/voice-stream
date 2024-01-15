@@ -19,7 +19,7 @@ id of that element to the `startAudio` function.  `startAudio` also takes the WS
 
 Outgoing audio is handled through a MediaRecorder, which doesn't require any additional elements on your HTML page.
 
-Here is a simple example from the [quickstart](../quickstart/walkthrough) demonstrating how these functions can be used in an HTML page.
+Here is a simple example from the [quickstart](../getting_started/walkthrough) demonstrating how these functions can be used in an HTML page.
 
     <button onclick="startAudio('audio-player', '/ws/audio')">Start Voice Chat</button>
     <button onclick="stopAudio()">Stop Voice Chat</button>

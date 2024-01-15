@@ -12,7 +12,7 @@ This demonstrates some of the flow controls available within VoiceStream.
 The full code for this application is in the [examples directory](https://github.com/DaveDeCaprio/voice-stream/blob/main/examples/quickstart.py) 
 of the VoiceStream repo.  There is a full copy of the source at the bottom of this page also.
 
-## Design
+## Design Approach
 
 This example is similar to the Quickstart, except that the browser makes two Websocket connections to the server.  One 
 for the audio, and a second connection to pass the text transcript.  Additionally, the client now generates a unique
