@@ -1,7 +1,7 @@
 # QuickStart
 
 In this quickstart we'll build a fully functional voice bot with a browser interface that allows you to have a two-way 
-conversation with [Google's Gemini][gemini] model.
+conversation with a [Google LLM][gemini] model.
 
 The server uses [FastAPI][fastapi] to serve a web page with start and stop audio buttons.   
 
@@ -51,7 +51,7 @@ Cloud setup yet.  We will do that in the next section.
 
 ## ![](google_cloud_logo_icon.png){.bg-warning w=50px} Google Cloud Setup
 
-In this QuickStart, we will use Google Cloud for the [Gemini][gemini] LLM, Speech Recognition, and Text-To-Speech.  There are two
+In this QuickStart, we will use Google Cloud for the [LLM][gemini], Speech Recognition, and Text-To-Speech.  There are two
 steps to that.  First, we need to set up credentials to call the APIs, and then we need to explicitly enable the
 APIs we want to use.
 
@@ -98,7 +98,7 @@ This is because even though you have valid credentials, the individual APIs all 
 In Google Cloud, individual APIs have to be specifically enabled for each project.  For this quickstart, go to the 3 
 links below, and click "Enable".
 
-* **[Vertex AI](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)** - Enables the Gemini LLM
+* **[Vertex AI](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)** - Enables the LLMs
 * **[Cloud Speech-to-Text API](https://console.cloud.google.com/apis/library/speech.googleapis.com)** - Enables speech recognition
 * **[Cloud Text-to-Speech API](https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview)** - Enables text-to-speech
 
@@ -121,7 +121,7 @@ Now, point your browser to < http://127.0.0.1:8000>.  You should see a simple pa
 
 ![img.png](img.png)
 
-Press "Start Voice Chat" and begin talking!  Gemini will talk back and converse with you as long as you'd like.
+Press "Start Voice Chat" and begin talking!  The LLM will talk back and converse with you as long as you'd like.
 
 ## Next Steps
 

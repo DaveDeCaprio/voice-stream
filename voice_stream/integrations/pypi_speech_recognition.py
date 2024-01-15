@@ -1,4 +1,8 @@
-"""Works with the PyPI SpeechRecognition package.  Currently unimplemented."""
+"""
+The `PyPI SpeechRecognition <https://pypi.org/project/SpeechRecognition/>`_ package provides a common interface for a bunch of different speech recognition systems.
+
+Integration with this package is on the roadmap but currently unimplemented.
+"""
 # # Works with the python speech_recognition package
 # import asyncio
 # from concurrent.futures import ThreadPoolExecutor

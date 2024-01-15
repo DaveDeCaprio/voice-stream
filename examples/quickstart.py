@@ -10,7 +10,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 # 0 - VoiceStream imports
-from voice_stream import map_step, log_step, recover_exception_step, AudioFormat
+from voice_stream import map_step, log_step, recover_exception_step
+from voice_stream.audio import AudioFormat
 from voice_stream.integrations.fastapi import (
     fastapi_websocket_bytes_source,
     fastapi_websocket_bytes_sink,

@@ -66,7 +66,7 @@ def filter_spurious_speech_start_events_step(
 
     Parameters
     ----------
-    async_iter : AsyncIterator[BaseEvent]
+    async_iter : AsyncIterator[voice_stream.events.BaseEvent]
         An asynchronous iterator that yields bytes of audio data.
 
     threshold_secs : float
@@ -74,7 +74,7 @@ def filter_spurious_speech_start_events_step(
 
     Returns
     -------
-    AsyncIterator[BaseEvent]
+    AsyncIterator[voice_stream.events.BaseEvent]
         A modified event stream that removes the spurious :class:`~voice_stream.events.SpeechStart` events.
 
     Example

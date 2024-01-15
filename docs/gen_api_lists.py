@@ -17,17 +17,21 @@ def write_class(f, module: str, name: str):
     f.write(f"   :show-inheritance:\n")
 
 
-def write_submodule(module_path: str, module_name: str, all_names: bool = False):
+def write_submodule(module_path: str, module_name: str):
     full_name = f"{module_path}.{module_name}"
     file = module_path.replace("voice_stream", "_gen").replace(".", "/")
     with open(f"{file}/{module_name}.rst", "w") as f:
         underline = "=" * len(module_name)
         f.write(f"{module_name}\n{underline}\n\n")
         m = importlib.import_module(full_name)
+        f.write(f"\n{m.__doc__}\n\n")
         for name, obj in inspect.getmembers(m):
-            if inspect.isfunction(obj) and (obj.__module__ == full_name or all_names):
+            if inspect.isfunction(obj) and obj.__module__.startswith("voice_stream"):
                 f.write(f".. autofunction:: {module_path}.{module_name}.{name}\n")
-            elif inspect.isclass(obj) and (obj.__module__ == full_name or all_names):
+            elif inspect.isclass(obj) and obj.__module__.startswith(
+                f"{module_path}.{module_name}"
+            ):
+                # print(f"{name} {obj} {obj.__module__} {module_path}.{module_name}\n")
                 write_class(f, f"{module_path}.{module_name}", name)
             # else:
             #     print(f"Unknown type: {module_path} {module_name} {name}")
@@ -37,13 +41,13 @@ import voice_stream
 
 # Doc for the basic packages
 with open("_gen/sources.rst", "w") as sources:
-    sources.write("Core Sources\n============\n\n")
+    sources.write("core sources\n============\n\n")
     with open("_gen/sinks.rst", "w") as sinks:
-        sinks.write("Core Sinks\n============\n\n")
+        sinks.write("core sinks\n============\n\n")
         with open("_gen/steps.rst", "w") as steps:
-            steps.write("Core Steps\n============\n\n")
+            steps.write("core steps\n============\n\n")
             with open("_gen/helpers.rst", "w") as helpers:
-                helpers.write("Helpers\n=======\n\n")
+                helpers.write("helpers\n=======\n\n")
 
                 for name, obj in inspect.getmembers(voice_stream):
                     if inspect.isfunction(obj):
@@ -59,10 +63,8 @@ with open("_gen/sources.rst", "w") as sources:
                         write_class(helpers, "voice_stream", name)
 
 
-from voice_stream import audio
-
-write_submodule("voice_stream", "audio", all_names=True)
-write_submodule("voice_stream", "events", all_names=True)
+write_submodule("voice_stream", "audio")
+write_submodule("voice_stream", "events")
 
 # Now do integrations
 from voice_stream import integrations
@@ -75,7 +77,15 @@ for submodule in submodules:
 with open("_gen/integrations/index.md", "w") as f:
     f.write(
         """
-# Integrations
+# integrations
+
+Integrations provide VoiceStream sources, steps, and sinks for working with various third-party tools.
+
+These include:
+
+* __Web Frameworks__ like [FastAPI](./fastapi) and [Quart](./quart) let you put a web API on your voice application.   
+* __AI Components__ for speech recognition, text to speech, and LLMs are provided by tools such as [LangChain](./langchain) and [Google Cloud APIs](./google) 
+* __Other audio sources__ allow integration into different kinds of applications, like [Twilio](./twilio) for voice calls and PyAudio for desktop audio.  
 
 ```{toctree}
 :hidden:

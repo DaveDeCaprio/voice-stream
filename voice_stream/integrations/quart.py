@@ -1,3 +1,13 @@
+"""
+`Quart <https://github.com/pallets/quart/>`_ is an async Python web framework based on Flask.  VoiceStream provides
+integrations to send and receive audio using websockets using Quart.
+
+.. note::
+    Flask generally uses SocketIO through the Flask_SocketIO library, which is different from regular WebSockets.
+    If you just want regular websockets, it's easier to switch to Quart, which is a drop in replacement.
+
+"""
+
 import json
 import logging
 from asyncio import CancelledError
@@ -55,7 +65,7 @@ async def quart_websocket_sink(
 ) -> None:
     """Takes an async iterator and sends everything to a Quart websocket.  Handles ."""
     """
-    Data flow sink to strings, dicts, or bytes bytes to a Quart websocket.
+    Data flow sink to strings, dicts, Pydantic objects, or bytes bytes to a Quart websocket.
 
     For each item in the incoming iterator, send it to the currently in scope Quart websocket connection.
 
@@ -92,6 +102,8 @@ async def quart_websocket_sink(
         async for message in async_iter:
             if isinstance(message, dict):
                 message = json.dumps(message)
+            elif hasattr(message, "model_dump"):
+                message = message.model_dump()
             await websocket.send(message)
     except UnexpectedMessageError as e:
         if "ASGIWebsocketState.CLOSED" in str(e):

@@ -1,4 +1,7 @@
-import dataclasses
+"""
+Integration with Google Cloud APIs.
+"""
+
 import logging
 from typing import AsyncIterator, Union, Tuple
 
@@ -29,7 +32,7 @@ from google.cloud.texttospeech_v1 import (
 )
 from pydantic import BaseModel
 
-from voice_stream.audio.audio_ops import remove_wav_header, AudioFormat
+from voice_stream.audio import AudioFormat, remove_wav_header
 from voice_stream.core import (
     map_step,
     filter_step,
@@ -166,7 +169,7 @@ def google_speech_step(
 
     Returns
     -------
-    Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[BaseEvent]]]
+    Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[voice_stream.events.BaseEvent]]]
         If `include_events` is False, returns an asynchronous iterator yielding recognized text from the audio stream.
         If `include-events` is True, returns a tuple with 2 iterators.  The first yields the recognized text, and the
         second contain speech events.
@@ -254,7 +257,7 @@ def google_speech_v1_step(
         An asynchronous iterator over audio data in bytes.
     speech_async_client : SpeechAsyncClient
         An instance of SpeechAsyncClientV1 for interacting with the Google Cloud Speech-to-Text API V1.
-    audio_format : AudioFormat
+    audio_format : voice_stream.audio.AudioFormat
         The audio format of the input data.  This is required in V1.  Use the V2 API for auto-detection of formats.
     model : str, optional
         The model to be used by the recognizer. Default is "latest_long".
@@ -265,7 +268,7 @@ def google_speech_v1_step(
 
     Returns
     -------
-    Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[BaseEvent]]]
+    Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[voice_stream.events.BaseEvent]]]
         If `include_events` is False, returns an asynchronous iterator yielding recognized text from the audio stream.
         If `include-events` is True, returns a tuple with 2 iterators.  The first yields the recognized text, and the
         second contain speech events.

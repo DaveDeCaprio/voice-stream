@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 import time
-from typing import AsyncIterator, Union
+from typing import AsyncIterator
 
 import asyncstdlib
 
@@ -257,39 +257,6 @@ async def ogg_concatenator_step(
             yield adjusted
 
 
-def remove_wav_header(wav_bytes: bytes) -> bytes:
-    """
-    Removes the wav header from a wav file, regardless of the format.
-
-    Parameters
-    ----------
-    wav_bytes
-        The beginning of a WAV file, including the header.
-
-    Returns
-    -------
-    bytes
-        The audio bytes from the file, without the header.
-    """
-    # Check if it's a valid RIFF file
-    if wav_bytes[:4] != b"RIFF" or wav_bytes[8:12] != b"WAVE":
-        raise ValueError("Invalid WAV file")
-
-    # Find the "data" chunk
-    index = 12
-    while index < len(wav_bytes):
-        chunk_id = wav_bytes[index : index + 4]
-        chunk_size = int.from_bytes(wav_bytes[index + 4 : index + 8], "little")
-        if chunk_id == b"data":
-            # Found the "data" chunk, return its content
-            start = index + 8  # Skip "data" chunk header
-            return wav_bytes[start : start + chunk_size]
-        # logger.info(f"Skipping chunk {chunk_id}")
-        index += 8 + chunk_size  # Move to the next chunk
-
-    raise ValueError("WAV file does not contain a 'data' chunk")
-
-
 def audio_rate_limit_step(
     async_iter: AsyncIterator[bytes],
     audio_format: AwaitableOrObj[AudioFormat],
@@ -307,7 +274,7 @@ def audio_rate_limit_step(
     async_iter : AsyncIterator[bytes]
         An asynchronous iterator returning bytes of audio data.
 
-    audio_format : AwaitableOrObj[AudioFormat]
+    audio_format : AwaitableOrObj[voice_stream.audio.AudioFormat]
        The format of the audio data.  Can be an Awaitable if the format isn't known when the step is created.
 
     buffer_seconds : float

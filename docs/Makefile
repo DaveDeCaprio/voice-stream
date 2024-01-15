@@ -14,8 +14,11 @@ help:
 
 .PHONY: help Makefile prebuild
 
+clean:
+	rm -rf _build
+
 prebuild:
-	python get_api_lists.py
+	python gen_api_lists.py
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).

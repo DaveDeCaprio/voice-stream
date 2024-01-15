@@ -25,20 +25,16 @@ logger = logging.getLogger(__name__)
 class AudioWithText(BaseModel):
     """
     Representing audio data along with its corresponding text.  Used as the output of a text-to-speech step.
-
-    Attributes
-    ----------
-    audio : bytes
-        The audio data.
-    text : str
-        The corresponding text for the audio.
-    audio_format : AudioFormat
-        The format of the audio.
     """
 
     audio: bytes
+    """The audio data."""
+
     text: str
+    """The corresponding text for the audio."""
+
     audio_format: AudioFormat
+    """The format of the audio."""
 
 
 TextToSpeechStep = Callable[[AsyncIterator[str]], AsyncIterator[AudioWithText]]
@@ -51,6 +47,7 @@ def buffer_tts_text_step(async_iter: AsyncIterator[str]) -> AsyncIterator[str]:
     When performing realtime TTS off of a token stream, there is a tradeoff.  You want to produce audio as soon as
     possible after receiving the first token, but passing longer utterances to a TTS engine produces more natural sounding
     speech.  This step buffers tokens to achieve a good balance by:
+
     1. Waiting for punctuation: Waits for some form of punctuation in the token stream to indicate the end of a phrase
        and then passes the full phrase.
     2. Buffers tokens received between pulls.  This step eagerly pulls tokens from the incoming iterator and buffers them.
@@ -76,6 +73,7 @@ def buffer_tts_text_step(async_iter: AsyncIterator[str]) -> AsyncIterator[str]:
     Note
     -------
     - An incoming empty string indicates an end of response and will cause the buffer to be flushed.
+
     """
     stream = wait_for_punctuation_step(async_iter)
     stream = str_buffer_step(stream)
@@ -173,9 +171,9 @@ def tts_rate_limit_step(
 
     Parameters
     ----------
-    async_iter : AsyncIterator[AudioWithText]
+    async_iter : AsyncIterator[voice_stream.AudioWithText]
         An asynchronous iterator yielding audio data paired with text.
-    audio_format : AwaitableOrObj[AudioFormat]
+    audio_format : AwaitableOrObj[voice_stream.audio.AudioFormat]
         The format of the audio stream, which can be an awaitable or a direct object.
     buffer_seconds : float, default 0.5
         The duration in seconds to buffer for rate limiting.

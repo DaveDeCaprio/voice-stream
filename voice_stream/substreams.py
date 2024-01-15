@@ -133,7 +133,7 @@ def cancelable_substream_step(
 
     Calls the `substream_func` to create a new substream for each item from the source iterator.  If any item is produced
     from the `cancel_iter` during the processing of this substream, the substream is immediately stopped.  When a stop occurs,
-     `cancel_messages` are optionally sent down each stream.
+    `cancel_messages` are optionally sent down each stream.
 
     Parameters
     ----------
@@ -161,6 +161,7 @@ def cancelable_substream_step(
     Notes
     -----
     - If you want to explicitly send `None` when a cancel occurs, use a :func:`~voice_stream:none_source`.
+
     """
 
     substream_completed = asyncio.Event()

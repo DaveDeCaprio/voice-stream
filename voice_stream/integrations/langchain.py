@@ -1,3 +1,7 @@
+"""
+The `LangChain <https://www.langchain.com/>`_ is a framework for building LLM based applications.  VoiceStream allows
+any LangChain runnable to be used to power a voice application.
+"""
 from __future__ import annotations
 
 from typing import AsyncIterator, Callable, Any, Optional

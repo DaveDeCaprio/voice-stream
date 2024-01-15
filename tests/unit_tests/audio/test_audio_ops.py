@@ -20,11 +20,11 @@ from voice_stream import (
 )
 from voice_stream.audio import AudioFormatError, wav_mulaw_file_source, AudioFormat
 from voice_stream.audio.audio_ops import (
-    remove_wav_header,
     wav_mulaw_file_sink,
     ogg_page_separator_step,
     ogg_concatenator_step,
 )
+from voice_stream.audio.audio_utils import remove_wav_header
 
 logger = logging.getLogger(__name__)
 

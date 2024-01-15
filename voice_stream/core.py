@@ -957,7 +957,7 @@ async def map_step(
 
     This function applies either a synchronous or asynchronous mapping function to each item in the
     input async iterator. If `ignore_none` is set to True, any items that are transformed to `None`
-     are not yielded. This feature allows the function to perform both transformation and filtering in a single step.
+    are not yielded. This feature allows the function to perform both transformation and filtering in a single step.
 
     Parameters
     ----------

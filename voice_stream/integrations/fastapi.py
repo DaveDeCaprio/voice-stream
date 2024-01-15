@@ -1,9 +1,14 @@
+"""
+`FastAPI <https://fastapi.tiangolo.com/>`_ is a high performance web framework.  VoiceStream provides integrations to
+send and receive audio using websockets using FastAPI.
+"""
+
 import logging
 from typing import AsyncIterator, Union
 
 import asyncstdlib
 from fastapi import WebSocket
-from starlette.websockets import WebSocketDisconnect
+from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +37,8 @@ async def fastapi_websocket_text_source(websocket: WebSocket) -> AsyncIterator[s
     -----
     - The function uses an infinite loop to listen for messages. It exits the loop and stops iterating
       when a WebSocketDisconnect exception occurs.
-    - The WebSocket connection is accepted at the beginning of the function, and the function expects
-      that the connection remains open during its operation.
+    - This source will call `accept` on the websocket if it has not already been called.
+
 
     Examples
     --------
@@ -48,7 +53,8 @@ async def fastapi_websocket_text_source(websocket: WebSocket) -> AsyncIterator[s
         >>>     stream = map_step(stream, lambda x: "Echo: "+x)
         >>>     await fastapi_websocket_text_sink(stream, websocket)
     """
-    await websocket.accept()
+    if websocket.client_state == WebSocketState.CONNECTING:
+        await websocket.accept()
     try:
         while True:
             yield await websocket.receive_text()
@@ -91,15 +97,16 @@ async def fastapi_websocket_bytes_source(websocket: WebSocket) -> AsyncIterator[
     -----
     This function is designed to be used with FastAPI's WebSocket support.
     It requires an established WebSocket connection passed as the parameter.
-    The function will automatically accept the WebSocket connection before
-    beginning to listen for incoming binary messages.
+
+    This source will call `accept` on the websocket if it has not already been called.
 
     See Also
     --------
     WebSocket.receive_bytes : Method of FastAPI's WebSocket to receive binary data.
 
     """
-    await websocket.accept()
+    if websocket.client_state == WebSocketState.CONNECTING:
+        await websocket.accept()
     try:
         while True:
             yield await websocket.receive_bytes()
@@ -141,16 +148,17 @@ async def fastapi_websocket_json_source(websocket: WebSocket) -> AsyncIterator[d
     Notes
     -----
     This function is specifically tailored for use with FastAPI's WebSocket support.
-    It requires an active WebSocket connection as the parameter. The function will
-    automatically accept the WebSocket connection before starting to listen for incoming
-    JSON messages.
+    It requires an active WebSocket connection as the parameter.
+
+    This source will call `accept` on the websocket if it has not already been called.
 
     See Also
     --------
     WebSocket.receive_json : Method of FastAPI's WebSocket to receive JSON data.
 
     """
-    await websocket.accept()
+    if websocket.client_state == WebSocketState.CONNECTING:
+        await websocket.accept()
     try:
         while True:
             yield await websocket.receive_json()
@@ -164,7 +172,7 @@ async def fastapi_websocket_text_sink(
     """
     Data flow sink to send data to a FastAPI WebSocket connection.
 
-    This function takes an asynchronous iterator, which can yield either strings or
+    This function takes an asynchronous iterator, which can yield either strings, Pydantic objects, or
     dictionaries, and sends each item to a specified WebSocket. If the item is a dictionary,
     it is sent as a JSON message. Otherwise, it is sent as a text message.
 
@@ -190,9 +198,10 @@ async def fastapi_websocket_text_sink(
 
     Notes
     -----
-    This function is useful for streaming data from an asynchronous source to a WebSocket
-    client. It supports both text and JSON formats, making it versatile for various types
-    of data communication in a FastAPI application.
+    - This function is useful for streaming data from an asynchronous source to a WebSocket
+      client. It supports both text and JSON formats, making it versatile for various types
+      of data communication in a FastAPI application.
+    - This sink will call `accept` on the websocket if it has not already been called.
 
     See Also
     --------
@@ -201,9 +210,15 @@ async def fastapi_websocket_text_sink(
 
     """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        if websocket.client_state == WebSocketState.CONNECTING:
+            await websocket.accept()
         async for message in owned_aiter:
             if isinstance(message, dict):
                 await websocket.send_json(message)
+            elif hasattr(message, "model_dump"):
+                json = message.model_dump()
+                logger.info(f"Sending {json}")
+                await websocket.send_json(json)
             else:
                 await websocket.send_text(message)
 
@@ -248,9 +263,12 @@ async def fastapi_websocket_bytes_sink(
     - It's essential that the `async_iter` provided is an asynchronous iterator yielding byte sequences.
     - The function will continue sending data until the iterator is exhausted.
     - In case of any interruption or when the iterator is exhausted, it ensures proper cleanup.
+    - This sink will call `accept` on the websocket if it has not already been called.
     """
     try:
         async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+            if websocket.client_state == WebSocketState.CONNECTING:
+                await websocket.accept()
             async for message in owned_aiter:
                 await websocket.send_bytes(message)
     finally:

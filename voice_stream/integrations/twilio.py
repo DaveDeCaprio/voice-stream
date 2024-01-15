@@ -1,3 +1,8 @@
+"""
+`Twilio <https://www.twilio.com>`_ provides an API for making and receiving telephone calls.  You can use Twilio along
+with VoiceStream to automate calls with an LLM.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -119,7 +124,7 @@ async def twilio_close_on_stop_step(
     """
     Data flow step that calls a close function when a stop message is received.
 
-    Recieves Twilio websocket messages and checks for a 'stop' event.  Upon receiving a 'stop' message, it triggers
+    Receives Twilio websocket messages and checks for a 'stop' event.  Upon receiving a 'stop' message, it triggers
     a closure function (typically to close the websocket) and continues to yield the remaining messages.
 
     Parameters
@@ -138,7 +143,8 @@ async def twilio_close_on_stop_step(
     Notes
     -----
     - The function does not stop yielding messages after the 'stop' event; it continues
-    to yield any remaining messages in the iterator after performing the closure action.
+      to yield any remaining messages in the iterator after performing the closure action.
+
     """
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
