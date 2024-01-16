@@ -25,7 +25,6 @@ from voice_stream.core import (
     queue_source,
 )
 from voice_stream.events import BaseEvent, CallStarted, CallEnded
-from voice_stream.integrations.quart import quart_websocket_source
 from voice_stream.types import map_future, resolve_awaitable_or_obj
 
 logger = logging.getLogger(__name__)
@@ -282,13 +281,14 @@ class TwilioInputFlow:
     current_calls: Dict[str, Any]
 
     @classmethod
-    async def create(cls, expose_all_messages: bool = False) -> TwilioInputFlow:
+    async def create(
+        cls, source: AsyncIterator[dict], expose_all_messages: bool = False
+    ) -> TwilioInputFlow:
         """
         Creates a basic flow to receive audio and call event data from Twilio.
         expose_all_messages - If true, all incoming twilio messages, including raw audio, will be set through the 'all_twilio_messages' iterator.  Otherwise this iterator will be empty.
         """
-        stream = quart_websocket_source()
-        stream = map_str_to_json_step(stream)
+        stream = map_str_to_json_step(source)
         stream = filter_step(stream, lambda x: x["event"] != "connected")
         if expose_all_messages:
             stream, all_twilio_messages = fork_step(stream)
@@ -302,12 +302,9 @@ class TwilioInputFlow:
         stream, stream_sid_f = extract_value_step(
             stream, value=lambda x: x["streamSid"]
         )
-        outbound_queue_f = map_future(
-            call_sid_f, lambda x: current_app.current_calls[x].outbound
-        )
-        inbound_queue_f = map_future(
-            call_sid_f, lambda x: current_app.current_calls[x].inbound
-        )
+        current_calls = {}
+        outbound_queue_f = map_future(call_sid_f, lambda x: current_calls[x].outbound)
+        inbound_queue_f = map_future(call_sid_f, lambda x: current_calls[x].inbound)
         audio, events = partition_step(stream, lambda x: x["event"] == "media")
         audio = twilio_media_to_audio_bytes_step(audio)
         events = twilio_close_on_stop_step(events)
@@ -321,4 +318,5 @@ class TwilioInputFlow:
             stream_sid_f,
             inbound_queue_f,
             outbound_queue_f,
+            current_calls,
         )

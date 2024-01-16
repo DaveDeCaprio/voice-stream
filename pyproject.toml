@@ -23,28 +23,28 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.9"
-aiofiles = ">=23.2.1"
-langchain = ">=0.0.353"
-mutagen = ">=1.47.0"
-pydantic = ">=2.5.3"
-asyncstdlib = ">=3.1.0"
-google-cloud-speech = { version = ">=2.23.0", optional = true }
-google-cloud-texttospeech = { version = ">=2.15.0", optional = true }
-langchain-google-genai = { version = ">=0.0.5", optional = true }
-twilio = { version = ">=8.11.0", optional = true }
-tiktoken = { version = ">=0.5.2", optional = true }
-openai = { version = ">=1.6.1", optional = true }
-quart = { version = ">=0.19.4", optional = true }
-pyaudio = {version = ">=0.2.14", optional = true}
-fastapi = {version = ">=0.108.0", optional = true}
-vosk = {version = ">=0.3.45", optional = true}
-grpcio = {version = ">=1.60.0", optional = true}
-google-cloud-aiplatform = {version = ">=1.39.0", optional = true}
-protobuf = {version = ">=4.25.2", optional = true} # Added to address build issues with readthedocs.
-cffi = {version = "^1.16.0", optional = true} # Added to address build issues with readthedocs.
-uvicorn = {version = ">=0.25.0", optional = true}
-websockets = {version = ">=12.0", optional = true}
-langchain-openai = {version = ">=0.0.1", optional = true}
+aiofiles = ">=22.1.0"
+langchain = ">=0.0.333"
+mutagen = ">=1.44.0"
+pydantic = ">=2.2.0"
+asyncstdlib = ">=3.9.0"
+google-cloud-speech = { version = ">=2.21.0", optional = true }
+google-cloud-texttospeech = { version = ">=2.13.0", optional = true }
+langchain-google-genai = { version = ">=0.0.2", optional = true }
+twilio = { version = ">=7.0.0", optional = true }
+tiktoken = { version = ">=0.3.3", optional = true }
+openai = { version = ">=1.7.2", optional = true }
+quart = { version = ">=0.18.0", optional = true }
+pyaudio = {version = ">=0.2.12", optional = true}
+fastapi = {version = ">=0.100.0", optional = true}
+vosk = {version = ">=0.3.42", optional = true}
+#grpcio = {version = ">=1.30.0", optional = true}
+google-cloud-aiplatform = {version = ">=1.38.0", optional = true}
+#protobuf = {version = ">=4.21.6", optional = true} # Added to address build issues with readthedocs.
+#cffi = {version = ">=1.10.0", optional = true} # Added to address build issues with readthedocs.
+uvicorn = {version = ">=0.19.0", optional = true}
+websockets = {version = ">=10.0", optional = true}
+#langchain-openai = {version = ">=0.0.1", optional = true}
 
 [tool.poetry.group.test.dependencies]
 pytest = ">=7.4.4"
@@ -64,11 +64,11 @@ python-dotenv = "^1.0.0"
 
 
 [tool.poetry.extras]
-openai = ["openai", "tiktoken", "langchain-openai"]
+openai = ["openai", "tiktoken"]
 twilio = ["twilio"]
-google = ["google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai", "protobuf", "cffi"]
+google = ["google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai"]
 quart = ["quart"]
-quickstart = ["fastapi", "uvicorn", "websockets", "google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai", "google-cloud-aiplatform", "grpcio"]
+quickstart = ["fastapi", "uvicorn", "websockets", "google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai", "google-cloud-aiplatform"]
 
 [[tool.poetry.source]]
 name = "pypi-test"
