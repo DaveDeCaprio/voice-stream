@@ -1591,6 +1591,23 @@ langchain-core = ">=0.1,<0.2"
 images = ["pillow (>=10.1.0,<11.0.0)"]
 
 [[package]]
+name = "langchain-openai"
+version = "0.0.2.post1"
+description = "An integration package connecting OpenAI and LangChain"
+optional = true
+python-versions = ">=3.8.1,<4.0"
+files = [
+    {file = "langchain_openai-0.0.2.post1-py3-none-any.whl", hash = "sha256:ba468b94c23da9d8ccefe5d5a3c1c65b4b9702292523e53acc689a9110022e26"},
+    {file = "langchain_openai-0.0.2.post1.tar.gz", hash = "sha256:f8e78db4a663feeac71d9f036b9422406c199ea3ef4c97d99ff392c93530e073"},
+]
+
+[package.dependencies]
+langchain-core = ">=0.1.7,<0.2"
+numpy = ">=1,<2"
+openai = ">=1.6.1,<2.0.0"
+tiktoken = ">=0.5.2,<0.6.0"
+
+[[package]]
 name = "langsmith"
 version = "0.0.80"
 description = "Client library to connect to the LangSmith LLM Tracing and Evaluation Platform."
@@ -3512,7 +3529,7 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 
 [extras]
 google = ["google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai"]
-openai = ["openai", "tiktoken"]
+openai = ["langchain-openai", "openai", "tiktoken"]
 quart = ["quart"]
 quickstart = ["fastapi", "google-cloud-aiplatform", "google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai", "uvicorn", "websockets"]
 twilio = ["twilio"]
@@ -3520,4 +3537,4 @@ twilio = ["twilio"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "59db61d21d21600afba3481aaf1586339a428e88b153e0466676d47ecc226440"
+content-hash = "d501674ec51c23bd27866f6e5f9a76e7eb48de2f140cc0c8701fca54a6ec3e57"
