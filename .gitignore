@@ -1,5 +1,5 @@
 # Secrets
-/.env
+.env
 google_creds.*
 
 # Poetry generated
