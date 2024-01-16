@@ -2084,7 +2084,7 @@ testing = ["google-api-core[grpc] (>=1.31.5)"]
 name = "protobuf"
 version = "4.25.2"
 description = ""
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "protobuf-4.25.2-cp310-abi3-win32.whl", hash = "sha256:b50c949608682b12efb0b2717f53256f03636af5f60ac0c1d900df6213910fd6"},
@@ -3537,4 +3537,4 @@ twilio = ["twilio"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "110a01e6437fad3f9a0ee9bf166946645364d7c603b7f395a66dcd62f6fe797d"
+content-hash = "0768f2d27c22933fca7582be1589f3698d304ebc7dda795c435d06cfa244b2d3"
