@@ -50,12 +50,12 @@ def to_source(x: SourceConvertable) -> AsyncIterator[T]:
     if callable(x):
         return x()
     elif x is None:
-        logger.info("Empty source")
+        # logger.debug("Empty source")
         from voice_stream.core import empty_source
 
         return empty_source()
     else:
-        logger.info("Single source")
+        # logger.debug("Single source")
         from voice_stream.core import single_source
 
         return single_source(x)

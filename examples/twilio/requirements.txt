@@ -1,0 +1,4 @@
+python-dotenv
+fastapi
+uvicorn
+voice-stream[twilio,google,openai]

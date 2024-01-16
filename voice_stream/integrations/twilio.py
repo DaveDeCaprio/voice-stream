@@ -9,7 +9,7 @@ import asyncio
 import base64
 import dataclasses
 import logging
-from typing import AsyncIterator, Tuple, Optional, Dict, Any, Callable
+from typing import AsyncIterator, Tuple, Optional, Dict, Any, Callable, Union, Coroutine
 
 import asyncstdlib
 
@@ -118,7 +118,8 @@ async def twilio_check_sequence_step(
 
 
 async def twilio_close_on_stop_step(
-    async_iter: AsyncIterator[dict], close_func: Callable[[], None]
+    async_iter: AsyncIterator[dict],
+    close_func: Callable[[], Union[None, Coroutine[Any, Any, None]]],
 ) -> AsyncIterator[dict]:
     """
     Data flow step that calls a close function when a stop message is received.

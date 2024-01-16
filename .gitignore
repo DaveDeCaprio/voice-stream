@@ -3,8 +3,8 @@
 google_creds.*
 
 # Poetry generated
-/.venv
-/.venvs
+.venv
+.venvs
 dist/
 
 # Cache
