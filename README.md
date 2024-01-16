@@ -59,7 +59,7 @@ Please see [here](https://voice-stream.readthedocs.io/en/latest/) for full docum
 
 <!-- start doc-highlights -->
 From here, explore the rest of the documentation to learn more about VoiceStream.
-* [Quickstart](https://voice-stream.readthedocs.io/en/latest/getting_started/index.html) - A full walkthrough of the code in this quickstart.
+* [Quickstart](https://voice-stream.readthedocs.io/en/latest/getting_started/index.html) - Build a fully functional voicebot in 15 minutes.
 * [Concepts](https://voice-stream.readthedocs.io/en/latest/concepts/index.html) - A methodical intro to the concepts underlying VoiceStream.
 * [Cookbook](https://voice-stream.readthedocs.io/en/latest/cookbook/index.html) - How to take advantage of the various capability of VoiceStream.
 * [GitHub Examples](https://github.com/DaveDeCaprio/voice-stream/blob/main/examples) - To view and run the code for fully worked examples.

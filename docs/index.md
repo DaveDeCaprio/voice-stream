@@ -12,7 +12,7 @@ hide-toc: true
 ## 📖 Exploring the Documentation
 
 Explore the rest of the documentation to learn more about VoiceStream.
-* [Quickstart](getting_started/index) - A full walkthrough of the code in this quickstart.
+* [Quickstart](getting_started/index) - Build a fully functional voicebot in 15 minutes.
 * [Concepts](concepts/index) - A methodical intro to the concepts underlying VoiceStream.
 * [Cookbook](cookbook/index) - How to take advantage of the various capability of VoiceStream.
 * [GitHub Examples](https://github.com/DaveDeCaprio/voice-stream/blob/main/examples) - To view and run the code for fully worked examples.
