@@ -29,7 +29,7 @@ the dependencies for specific integrations separately.
 
 <!-- start elevator-pitch -->
 
-VoiceStream is a framework for building voice bots using language models.
+VoiceStream is a framework for building voicebots using language models.
 
 * Integrates with LangChain so you can take any LLM application.
 * Makes it easy to use different Text-To-Speech and Speech Recognition models
@@ -39,9 +39,6 @@ VoiceStream is a framework for building voice bots using language models.
 VoiceStream is built to make it easy to build voice applications on top of LangChain, but 
 can work with any LLM framework.
 
-<!-- end elevator-pitch -->
-
-
 ## 🧱 What can you build with VoiceStream?
 
 * :robot: **VoiceBots** - Chatbots that you can talk and listen to instead of typing.
@@ -50,16 +47,24 @@ can work with any LLM framework.
 
 ## 🚀 How does VoiceStream help?
 
-The main value props of VoiceStream is:
+The main value props of VoiceStream are:
+1. **Components** - Modular and easy-to-use components for audio input/output, speech recognition, and text to speech.
 1. **Streaming** - Audio programming can be tricky in Python.  VoiceStream provides simple streaming commands that make it easy to string together audio applications. 
-1. **Components** - Modular and easy-to-use components for various components of the system
+
+<!-- end elevator-pitch -->
 
 ## 📖 Documentation
 
 Please see [here](https://voice-stream.readthedocs.io/en/latest/) for full documentation, which includes:
 
 <!-- start doc-highlights -->
-TODO
+From here, explore the rest of the documentation to learn more about VoiceStream.
+* [Quickstart](https://voice-stream.readthedocs.io/en/latest/getting_started/index.html) - A full walkthrough of the code in this quickstart.
+* [Concepts](https://voice-stream.readthedocs.io/en/latest/concepts/index.html) - A methodical intro to the concepts underlying VoiceStream.
+* [Cookbook](https://voice-stream.readthedocs.io/en/latest/cookbook/index.html) - How to take advantage of the various capability of VoiceStream.
+* [GitHub Examples](https://github.com/DaveDeCaprio/voice-stream/blob/main/examples) - To view and run the code for fully worked examples.
+* [API Reference](https://voice-stream.readthedocs.io/en/latest/reference/index.html) - If you are into reading API docs directly.
+
 <!-- end doc-highlights -->
 
 ## 💁 Contributing

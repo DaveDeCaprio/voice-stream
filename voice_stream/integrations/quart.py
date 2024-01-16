@@ -13,8 +13,15 @@ import logging
 from asyncio import CancelledError
 from typing import AsyncIterator, Union, Dict
 
+try:
+    from quart import websocket
+except ImportError:
+    raise ImportError(
+        "Could not import quart python package. "
+        "Please install it with `pip install quart`."
+    )
 from hypercorn.utils import UnexpectedMessageError
-from quart import websocket
+
 
 logger = logging.getLogger(__name__)
 

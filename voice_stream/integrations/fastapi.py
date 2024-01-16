@@ -7,7 +7,15 @@ import logging
 from typing import AsyncIterator, Union
 
 import asyncstdlib
-from fastapi import WebSocket
+
+try:
+    from fastapi import WebSocket
+except ImportError:
+    raise ImportError(
+        "Could not import fastapi python package. "
+        "Please install it with `pip install fastapi`."
+    )
+
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 logger = logging.getLogger(__name__)

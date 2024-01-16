@@ -3528,7 +3528,7 @@ docs = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.link
 testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "pytest (>=6)", "pytest-black (>=0.3.7)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-ignore-flaky", "pytest-mypy (>=0.9.1)", "pytest-ruff"]
 
 [extras]
-google = ["google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai"]
+google = ["google-cloud-aiplatform", "google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai"]
 openai = ["langchain-openai", "openai", "tiktoken"]
 quart = ["quart"]
 quickstart = ["fastapi", "google-cloud-aiplatform", "google-cloud-speech", "google-cloud-texttospeech", "langchain-google-genai", "uvicorn", "websockets"]
@@ -3537,4 +3537,4 @@ twilio = ["twilio"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "c1b471a6a54153880d9b1d80088944befd118a935398b833afab4aa347951dbf"
+content-hash = "fd2b9679ef2abfa587ea058eacfce77e90812f16b624f5fe2f8c0e4b49de8034"
