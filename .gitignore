@@ -8,7 +8,7 @@ google_creds.*
 dist/
 
 # Cache
-/.langchain.db
+.langchain.db
 
 # JetBrains IDE
 .idea/
