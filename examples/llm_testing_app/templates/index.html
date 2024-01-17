@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Test App</title>
+    <style>
+        .container {
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        .phone-input {
+            margin-bottom: 20px;
+        }
+
+        .button {
+            margin: 10px;
+        }
+
+        #result {
+            margin-top: 20px;
+            white-space: pre-line; /* Keeps the line breaks */
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="radio-group">
+        <label class="radio-label">
+            <input type="radio" name="call-type" value="browser" checked="true"> Browser Audio
+        </label>
+        <div class="phone-input">
+            <label class="radio-label">
+                <input type="radio" name="call-type" value="telephone"> Telephone
+            </label>
+            <label for="phone-number">Phone Number:</label>
+            <input type="tel" id="phone-number" value="+19729513168">
+        </div>
+    </div>
+
+
+    <button class="button" onclick="initiateCall('record')">Record</button>
+    <button class="button" onclick="initiateCall('transcribe')">Transcribe</button>
+    <button class="button" onclick="initiateCall('langchain/math_physics_routing')">OpenAI</button>
+
+    <div id="result"></div>
+
+    <button class="button" id="audio-button" onclick="stopBrowserCall()" disabled="true">End Browser Call</button>
+
+    <!-- Audio controls for user feedback -->
+    <div>
+        <audio id="audio-player"></audio>
+    </div>
+
+
+</div>
+<script>
+    async function initiateCall(endpoint) {
+        var callType = document.querySelector('input[name="call-type"]:checked');
+        var phoneNumber = document.getElementById('phone-number').value;
+        var resultDiv = document.getElementById('result');
+
+        if (callType.value === 'browser') {
+            await startBrowserCall(endpoint);
+        } else {
+            try {
+                const response = await fetch(`/call/${endpoint}?phone=${encodeURIComponent(phoneNumber)}`);
+                const data = await response.json();
+
+                // Extract callSid from the response
+                const callSid = data.callSid;
+                if (callSid) {
+                    connectCallStatusWebSocket(callSid);
+                }
+                resultDiv.textContent = "Queued call to " + phoneNumber + " with call_sid " + callSid;
+
+            } catch (error) {
+                resultDiv.value = 'Error: ' + error.message;
+            }
+        }
+    }
+
+    let callStatusWebsocket;
+
+    function connectCallStatusWebSocket(callSid) {
+        // Construct WebSocket URL based on the current location
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host; // Includes hostname and port if present
+        const wsUrl = `${protocol}//${host}/callStatus/${callSid}`;
+        var lastEventName = "";
+
+        callStatusWebsocket = new WebSocket(wsUrl);
+        callStatusWebsocket.onmessage = function (event) {
+            // Append the new status message to the result div
+            var resultDiv = document.getElementById('result');
+            const data = JSON.parse(event.data)
+            resultDiv.textContent += formatCallStatusEvent(lastEventName, data);
+            lastEventName = data.event_name;
+        }
+        callStatusWebsocket.onerror = function (event) {
+            console.error("WebSocket error observed:", event);
+        };
+        console.log(`Monitoring call status for ${callSid}"}`)
+    }
+
+    function formatCallStatusEvent(lastEventName, data) {
+        if (data.event_name == 'text_input' || data.event_name == 'text_output') {
+            if (lastEventName === data.event_name)
+                return data.text;
+            else
+                return `\n[${data.timestamp}] ${data.event_name}: ${data.text}`;
+        }
+        // create a json string with all elements of data except timestamp and event_name
+        const dataWithoutTimestamp = JSON.stringify(data, (key, value) => {
+            if (key !== 'timestamp' && key !== 'event_name') {
+                return value;
+            }
+        });
+        return `\n[${data.timestamp}] ${data.event_name}: ${dataWithoutTimestamp}`;
+    }
+
+    let audioWebSocket;
+    let mediaRecorder;
+    let audioPlayer = document.getElementById('audio-player');
+
+    async function startBrowserCall(endpoint) {
+        var resultDiv = document.getElementById('result');
+        resultDiv.textContent = "";
+        const audioButton = document.getElementById('audio-button');
+        audioButton.disabled = false;
+        const uuid = generateUUID();
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+            handleAudioStream(stream, endpoint, uuid);
+        } catch (err) {
+            console.error('Error accessing media devices.', err);
+        }
+        connectCallStatusWebSocket(uuid)
+    }
+
+    function stopBrowserCall() {
+        console.log('Stopping audio');
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            //console.log(`Media recorder state: ${mediaRecorder.state}`);
+        }
+        if (audioWebSocket) {
+            audioWebSocket.close();
+        }
+        if (callStatusWebsocket) {
+            callStatusWebsocket.close();
+        }
+        // Reset the media player if needed
+        //audioPlayer.pause();
+        const audioButton = document.getElementById('audio-button');
+        audioButton.disabled = true;
+    }
+
+    let waitingToPlay = false;
+
+    function handleAudioStream(stream, endpoint, uuid) {
+        // Initialize MediaRecorder to record the audio stream
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = handleDataAvailable;
+        mediaRecorder.onstart = () => console.log('MediaRecorder started');
+        mediaRecorder.onerror = (error) => console.error('MediaRecorder error:', error);
+
+        // Establish WebSocket connection for audio data
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const url = `${protocol}//${host}/ws/audio/${endpoint}?id=${uuid}`
+        console.log(`Connecting to audio websocket at ${url}`)
+        audioWebSocket = new WebSocket(url);
+
+        audioWebSocket.onopen = () => {
+            console.log(`Starting to transmit audio for browser call ${uuid}`);
+            mediaRecorder.start(20); // Send data every 20ms.  This is what Twilio uses.
+        };
+        setupAudioPlayer(audioWebSocket);
+
+        //console.log(`Media recorder state on start: ${mediaRecorder.state}`);
+    }
+
+    // MediaSource approach
+    function setupAudioPlayer(audioWebSocket) {
+        console.log("Setting up audio playback.")
+        let queue = [];
+        let sourceBuffer;
+
+        const mediaSource = new MediaSource();
+        mediaSource.onsourceopen = () => {
+            sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+            sourceBuffer.addEventListener('updateend', () => {
+                if (queue.length > 0 && !sourceBuffer.updating) {
+                    sourceBuffer.appendBuffer(queue.shift());
+                }
+            });
+            audioPlayer.play()
+        };
+        audioPlayer.src = URL.createObjectURL(mediaSource);
+        audioWebSocket.onmessage = async (event) => {
+            const audioData = await event.data.arrayBuffer();
+            queue.push(audioData);
+            if (sourceBuffer && !sourceBuffer.updating) {
+                sourceBuffer.appendBuffer(queue.shift());
+            }
+        };
+        audioWebSocket.onclose = () => {
+            if (mediaSource.readyState === 'open') {
+                mediaSource.endOfStream();
+            }
+        };
+        audioWebSocket.onerror = (event) => {
+            console.error('WebSocket Error:', event);
+        };
+    }
+
+    function handleDataAvailable(event) {
+        //console.log('Media data available. Size:', event.data.size);
+        if (event.data.size > 0 && audioWebSocket && audioWebSocket.readyState === WebSocket.OPEN) {
+            audioWebSocket.send(event.data);
+        }
+    }
+
+    function generateUUID() {
+        return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+    }
+</script>
+</body>
+</html>

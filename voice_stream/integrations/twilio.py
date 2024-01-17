@@ -282,8 +282,12 @@ class TwilioInputFlow:
     current_calls: Dict[str, Any]
 
     @classmethod
-    async def create(
-        cls, source: AsyncIterator[dict], expose_all_messages: bool = False
+    def create(
+        cls,
+        source: AsyncIterator[dict],
+        close_func: Callable[[], None],
+        current_calls: Dict[str, Any],
+        expose_all_messages: bool = False,
     ) -> TwilioInputFlow:
         """
         Creates a basic flow to receive audio and call event data from Twilio.
@@ -303,12 +307,11 @@ class TwilioInputFlow:
         stream, stream_sid_f = extract_value_step(
             stream, value=lambda x: x["streamSid"]
         )
-        current_calls = {}
         outbound_queue_f = map_future(call_sid_f, lambda x: current_calls[x].outbound)
         inbound_queue_f = map_future(call_sid_f, lambda x: current_calls[x].inbound)
         audio, events = partition_step(stream, lambda x: x["event"] == "media")
         audio = twilio_media_to_audio_bytes_step(audio)
-        events = twilio_close_on_stop_step(events)
+        events = twilio_close_on_stop_step(events, close_func=close_func)
         events = twilio_format_events_step(events)
         events = merge_step(events, queue_source(inbound_queue_f))
         return cls(

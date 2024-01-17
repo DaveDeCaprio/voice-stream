@@ -4,6 +4,8 @@ import logging
 from asyncio import InvalidStateError
 from typing import AsyncIterator, Any, TypeVar
 
+from voice_stream.types import is_async_iterator
+
 T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
@@ -176,7 +178,7 @@ class SwitchableIterator:
         self.state_change_event.set()
 
     def switch(self, async_iter: AsyncIterator):
-        if not inspect.isasyncgen(async_iter):  # and not is_async_iterator(async_iter):
+        if not inspect.isasyncgen(async_iter) and not is_async_iterator(async_iter):
             raise ValueError(
                 f"SwitchableIterator.switch must be called with an AsyncIterator.  Got {async_iter}"
             )

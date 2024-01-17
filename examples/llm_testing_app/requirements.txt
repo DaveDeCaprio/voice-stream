@@ -1,0 +1,15 @@
+-e ../..
+python-dotenv
+quart
+uvicorn
+openai
+tiktoken
+langchain-openai
+google-cloud-speech
+google-cloud-texttospeech
+google-cloud-aiplatform
+langchain-google-genai
+pyngrok
+twilio
+
+

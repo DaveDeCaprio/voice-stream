@@ -1,3 +1,7 @@
+"""
+Simple example showing serving a text chat app using a source, sink, and LLM step.
+"""
+
 import logging
 import os
 import uuid
@@ -6,14 +10,20 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 from langchain_community.cache import SQLiteCache
+from langchain_community.chat_models import ChatVertexAI
 from langchain_core.globals import set_llm_cache
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 from voice_stream import map_step
 from voice_stream.integrations.fastapi import (
     fastapi_websocket_text_source,
     fastapi_websocket_text_sink,
 )
-from voice_stream.integrations.langchain import langchain_load_memory_step
+from voice_stream.integrations.langchain import (
+    langchain_load_memory_step,
+    langchain_step,
+)
 from voice_stream.types import load_attribute
 
 logger = logging.getLogger(__name__)
@@ -104,7 +114,11 @@ async def get():
 
 
 load_dotenv()
-chain = load_attribute(os.environ["EXAMPLE_CHAIN"])()
+chain = (
+    ChatPromptTemplate.from_messages([("human", "{query}")])
+    | ChatVertexAI()
+    | StrOutputParser()
+)
 
 
 @app.websocket("/ws")
@@ -118,8 +132,6 @@ async def websocket_endpoint(websocket: WebSocket):
             "config": {"configurable": {"session_id": session_id}},
         },
     )
-    stream = langchain_load_memory_step(
-        stream, chain, input_key="input", config_key="config"
-    )
+    stream = langchain_step(stream, chain, input_key="input", config_key="config")
     stream = map_step(stream, lambda x: x, ignore_none=True)
     await fastapi_websocket_text_sink(stream, websocket)

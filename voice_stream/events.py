@@ -1,4 +1,5 @@
 import dataclasses
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -81,7 +82,7 @@ class CallStarted(BaseEvent):
 
     call_id: str
     """The unique identifier for the call."""
-    stream_id: str
+    stream_id: Optional[str] = None
     """The unique identifier for the audio stream associated with this call."""
     event_name: str = "call_started"
     """Always 'call_started'."""

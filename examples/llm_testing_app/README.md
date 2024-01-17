@@ -1,11 +1,10 @@
-# GPT-4 vs. Gemini Showdown
+# LLM Testing App
 
-This app has manages a browser based text or voice conversation with GPT-4 and Gemini.
-The format is like a panel discussion where you are the moderator and GPT-4 and Gemini 
-are the panelists, answering your questions.
+This app can be used for testing apps in development.
 
-The app is set up to take turns, so the moderator speaks, and then one of GPT-4 or Gemini speaks.
-Which model speaks is decided by a routing prompt that chooses the appropriate model based on context.
+Allows a single LangChain to be tested using text chat, browser based audio, or telephony.
+
+Records incoming audio to a logs directory.
 
 ## Setup
 
@@ -50,8 +49,3 @@ Point your browser to: http: and you should see:
 
 ![browser.png](./browser.png)
 
-## Walkthrough
-
-This is a larger app and there is no code walkthrough, but the code is commented.
-
-The mechanism used to handle interruptions is described in the Cookbook in [Interruptions](https://voice-stream.readthedocs.io/en/latest/cookbook/interruptions.html). 
