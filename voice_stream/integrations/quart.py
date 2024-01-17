@@ -58,6 +58,7 @@ async def quart_websocket_source() -> AsyncIterator[Union[bytes, str]]:
     >>>     stream = map_step(stream, lambda x: "Echo: "+x)
     >>>     await quart_websocket_sink(stream)
     """
+    await websocket.accept()
     while True:
         try:
             message = await websocket.receive()

@@ -9,6 +9,7 @@ dist/
 
 # Cache
 .langchain.db
+logs/
 
 # JetBrains IDE
 .idea/

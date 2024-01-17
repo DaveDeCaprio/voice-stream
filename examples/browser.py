@@ -36,7 +36,7 @@ from voice_stream.integrations.google import (
     google_speech_v1_step,
     google_text_to_speech_step,
 )
-from voice_stream.integrations.langchain import langchain_step
+from voice_stream.integrations.langchain import langchain_load_memory_step
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)s - %(message)s"
@@ -146,7 +146,7 @@ async def audio_websocket_endpoint(websocket: WebSocket, id: str):
     )
     stream, text_input_stream = fork_step(stream)
     stream = map_step(stream, lambda x: {"query": x})
-    stream = langchain_step(stream, chain, on_completion="")
+    stream = langchain_load_memory_step(stream, chain, on_completion="")
     stream = recover_exception_step(
         stream,
         Exception,

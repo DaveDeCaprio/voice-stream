@@ -13,7 +13,7 @@ from voice_stream.integrations.fastapi import (
     fastapi_websocket_text_source,
     fastapi_websocket_text_sink,
 )
-from voice_stream.integrations.langchain import langchain_step
+from voice_stream.integrations.langchain import langchain_load_memory_step
 from voice_stream.types import load_attribute
 
 logger = logging.getLogger(__name__)
@@ -118,6 +118,8 @@ async def websocket_endpoint(websocket: WebSocket):
             "config": {"configurable": {"session_id": session_id}},
         },
     )
-    stream = langchain_step(stream, chain, input_key="input", config_key="config")
+    stream = langchain_load_memory_step(
+        stream, chain, input_key="input", config_key="config"
+    )
     stream = map_step(stream, lambda x: x, ignore_none=True)
     await fastapi_websocket_text_sink(stream, websocket)

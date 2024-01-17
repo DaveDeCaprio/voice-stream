@@ -204,9 +204,9 @@ def google_speech_step(
     )
     stream = concat_step(config, stream)
     stream = async_init_step(stream, speech_async_client.streaming_recognize)
-    stream = recover_exception_step(
-        stream, Aborted, lambda x: logger.info("Google Recognize aborted.")
-    )
+    # stream = recover_exception_step(
+    #     stream, Aborted, lambda x: logger.info("Google Recognize aborted.")
+    # )
     # stream = filter_step(stream, lambda x: x.results[0].is_final)
     # stream = log_step(stream, "google_speech")
 

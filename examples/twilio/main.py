@@ -32,7 +32,7 @@ from voice_stream.integrations.google import (
     google_speech_v1_step,
     google_text_to_speech_step,
 )
-from voice_stream.integrations.langchain import langchain_step
+from voice_stream.integrations.langchain import langchain_load_memory_step
 from voice_stream.integrations.twilio import (
     twilio_check_sequence_step,
     twilio_media_to_audio_bytes_step,
@@ -144,7 +144,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
     )
     stream = log_step(stream, "Recognized speech")
     stream = map_step(stream, lambda x: {"query": x})
-    stream = langchain_step(stream, chain, on_completion="")
+    stream = langchain_load_memory_step(stream, chain, on_completion="")
     stream = recover_exception_step(
         stream,
         Exception,

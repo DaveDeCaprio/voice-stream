@@ -28,6 +28,8 @@ from voice_stream.core import (
     empty_source,
     none_source,
     QueueAsyncIterator,
+    collect_dict_step,
+    empty_sink,
 )
 from voice_stream.queue_with_exception import QueueWithException
 from voice_stream.speech_to_text import (
@@ -67,9 +69,11 @@ __all__ = [
     "byte_buffer_step",
     "cancelable_substream_step",
     "chunk_bytes_step",
+    "collect_dict_step",
     "concat_step",
     "count_step",
     "empty_source",
+    "empty_sink",
     "EndOfStreamMarker",
     "extract_value_step",
     "filter_step",

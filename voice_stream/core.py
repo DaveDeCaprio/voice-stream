@@ -604,6 +604,52 @@ def map_str_to_json_step(async_iter: AsyncIterator[str]) -> AsyncIterator[dict]:
     return map_step(async_iter, lambda x: json.loads(x))
 
 
+async def collect_dict_step(async_iter: AsyncIterator[dict]) -> AsyncIterator[dict]:
+    """
+    Data flow step that appends values to a dictionary until an empty value is passed.
+
+    This step combines dictionary values coming out of an iterator.  It adds new keys to the output dictionary and
+    appends values if possible (if not it replaces values).  It emits the current dictionary when an empty input
+    is pulled form the incoming iterator.  Useful for combining incremental results coming from a streamed LangChain.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[Iterable[T]]
+        An asynchronous iterator where each item is an iterable of elements.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator yielding combined dictionaries.
+
+    Examples
+    --------
+    >>> stream = array_source([{'text':'Hello'}, {'text':' World!', 'confidence':0.75}, None])
+    >>> stream = collect_dict_step(stream)
+    >>> done = await array_sink(stream)
+    >>> assert done == [{'text':"Hello World!", 'confidence': 0.75}]
+    """
+
+    def combine(x, y):
+        try:
+            return x + y
+        except:
+            return y
+
+    buffer = {}
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            if item:
+                appended_vals = {
+                    k: (v if k not in buffer else combine(buffer[k], v))
+                    for k, v in item.items()
+                }
+                buffer = {**buffer, **appended_vals}
+            else:
+                yield buffer
+                buffer = {}
+
+
 async def flatten_step(
     async_iter: AsyncIterator[Union[Iterable[T], AsyncIterator[T]]],
 ) -> AsyncIterator[T]:

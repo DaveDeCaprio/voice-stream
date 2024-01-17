@@ -1,11 +1,13 @@
+import logging
 from pprint import pformat
 from typing import Dict, Iterator
 
 from langchain_core.runnables import RunnableBranch
 from langchain_core.runnables.base import RunnableLike, RunnableGenerator
 
-from voice_stream.langchain_extensions.parsers import logger
 from voice_stream.types import T
+
+logger = logging.getLogger(__name__)
 
 
 class RunnableSwitch(RunnableBranch):
