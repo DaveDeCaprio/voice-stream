@@ -12,3 +12,5 @@ the LLM will continue on thinking that it had said the full two paragraphs to th
 VoiceStream has all the tools you need to handle interruptions cleanly.  We will walk through what that looks like here.
 
 The code shown here is from the [gpt4_gemini_showdown example](https://github.com/DaveDeCaprio/voice-stream/blob/main/examples/gpt4_gemini_showdown/main.py) in the GitHub repo.
+
+## 

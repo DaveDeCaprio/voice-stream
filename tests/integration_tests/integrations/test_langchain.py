@@ -17,7 +17,10 @@ from voice_stream import (
 from voice_stream.audio import wav_mulaw_file_sink, AudioFormat
 from voice_stream.core import single_source, array_sink
 from voice_stream.integrations.google import google_text_to_speech_step
-from voice_stream.integrations.langchain import langchain_load_memory_step
+from voice_stream.integrations.langchain import (
+    langchain_load_memory_step,
+    langchain_step,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,7 @@ async def test_llm_and_tts(tmp_path):
             "What is 4*8",
         ]
     )
-    stream = langchain_load_memory_step(stream, chain, on_completion="")
+    stream = langchain_step(stream, chain, on_completion="")
     stream = str_buffer_step(stream)
     stream = log_step(stream, "LLM output")
     text_to_speech_async_client = TextToSpeechAsyncClient()
@@ -51,7 +54,7 @@ async def test_gemini():
         | StrOutputParser()
     )
     stream = single_source({"query": "What's 2+2?"})
-    stream = langchain_load_memory_step(stream, chain, on_completion="")
+    stream = langchain_step(stream, chain, on_completion="")
     out = await array_sink(stream)
     logger.info(f"Gemini response {out}")
     assert len(out) == 2
