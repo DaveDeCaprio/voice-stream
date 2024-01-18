@@ -163,6 +163,24 @@ async def test_google_text_to_speech(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_google_text_to_speech_fast(tmp_path):
+    stream = array_source(
+        ["Hello world", "Longer second utterance that drags on a bit and keeps going"]
+    )
+    text_to_speech_async_client = TextToSpeechAsyncClient()
+    stream = google_text_to_speech_step(
+        stream,
+        text_to_speech_async_client,
+        audio_format=AudioFormat.WAV_MULAW_8KHZ,
+        speaking_rate=4,
+    )
+    stream = map_step(stream, lambda x: x.audio)
+    target = tmp_path.joinpath("tts_fast.wav")
+    out = await wav_mulaw_file_sink(stream, target)
+    assert_files_equal(example_file("tts_fast.wav"), target, mode="b")
+
+
+@pytest.mark.asyncio
 async def test_google_text_to_speech_ogg(tmp_path):
     stream = array_source(
         ["Hello world", "Longer second utterance that drags on a bit and keeps going"]

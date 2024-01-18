@@ -67,6 +67,7 @@ async def google_text_to_speech_step(
     text_to_speech_async_client: TextToSpeechAsyncClient,
     voice_name: str = "en-US-Standard-H",
     audio_format: GoogleAudioConfig = AudioFormat.OGG_OPUS,
+    speaking_rate: float = 1.0,
 ) -> AsyncIterator[AudioWithText]:
     """
     Data flow step that converts text to speech using Google's Text-to-Speech service.
@@ -85,6 +86,10 @@ async def google_text_to_speech_step(
         Default voice name to be used for text-to-speech conversion. Default is "en-US-Standard-H".
     audio_format : GoogleAudioConfig, optional
         The audio format for the output speech. Default is AudioFormat.OGG_OPUS.
+    speaking_rate
+         Speaking rate/speed, in the range [0.25, 4.0]. 1.0 is the normal native speed supported by the specific voice.
+         2.0 is twice as fast, and 0.5 is half as fast. If unset(0.0), defaults to the native 1.0 speed.
+         Ignored if a GoogleAudioConfig is passed to `audio_format`.
 
     Yields
     ------
@@ -98,7 +103,7 @@ async def google_text_to_speech_step(
       which specifies the voice for a particular text block.
     - Supports different audio encoding formats based on the GoogleAudioConfig.
     """
-    audio_config = _resolve_google_audio_config(audio_format)
+    audio_config = _resolve_google_audio_config(audio_format, speaking_rate)
 
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
@@ -204,6 +209,7 @@ def google_speech_step(
     )
     stream = concat_step(config, stream)
     stream = async_init_step(stream, speech_async_client.streaming_recognize)
+
     # stream = recover_exception_step(
     #     stream, Aborted, lambda x: logger.info("Google Recognize aborted.")
     # )
@@ -299,6 +305,7 @@ def google_speech_v1_step(
     stream = recover_exception_step(
         stream, Aborted, lambda x: logger.info("Google Recognize aborted.")
     )
+
     # stream = filter_step(stream, lambda x: x.results[0].is_final)
     # stream = log_step(stream, "google_speech")
 
@@ -340,7 +347,7 @@ def _map_speech_events(input):
     return None
 
 
-def _resolve_google_audio_config(audio_format: GoogleAudioConfig):
+def _resolve_google_audio_config(audio_format: GoogleAudioConfig, speaking_rate: float):
     if isinstance(audio_format, AudioConfig):
         return audio_format
     elif audio_format == AudioFormat.WAV_MULAW_8KHZ:
@@ -348,16 +355,17 @@ def _resolve_google_audio_config(audio_format: GoogleAudioConfig):
         return AudioConfig(
             audio_encoding=AudioEncoding.MULAW,
             sample_rate_hertz=8000,
+            speaking_rate=speaking_rate,
         )
     elif audio_format == AudioFormat.OGG_OPUS:
         # noinspection PyTypeChecker
         return AudioConfig(
-            audio_encoding=AudioEncoding.OGG_OPUS,
+            audio_encoding=AudioEncoding.OGG_OPUS, speaking_rate=speaking_rate
         )
     elif audio_format == AudioFormat.MP3:
         # noinspection PyTypeChecker
         return AudioConfig(
-            audio_encoding=AudioEncoding.MP3,
+            audio_encoding=AudioEncoding.MP3, speaking_rate=speaking_rate
         )
     else:
         assert False, f"Unsupported audio format {audio_format}"

@@ -213,6 +213,7 @@ async def audio(id):
             stream,
             current_app.text_to_speech_async_client,
             audio_format=AudioFormat.MP3,
+            speaking_rate=1.25,
         )
         stream, text_output = tts_rate_limit_step(stream, audio_format=AudioFormat.MP3)
         text_output = map_step(text_output, lambda x: {"output": x})
