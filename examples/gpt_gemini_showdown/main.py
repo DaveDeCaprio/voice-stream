@@ -166,7 +166,7 @@ async def audio(id):
     stream = quart_websocket_source()
     stream, audio_input = fork_step(stream)
 
-    stream, speech_start = google_speech_step(
+    stream, speech_start_stream = google_speech_step(
         stream,
         current_app.speech_async_client,
         project=app.config["GCP_PROJECT_ID"],
@@ -183,7 +183,7 @@ async def audio(id):
     memory = ConversationBufferMemory(return_messages=True)
     chain = full_discussion_chain()
 
-    def response_stream(stream):
+    def create_response_substream(stream):
         stream = map_step(stream, lambda x: {"query": x})
         stream = langchain_load_memory_step(stream, memory)
         stream = log_step(stream, "LLM Input")
@@ -222,13 +222,13 @@ async def audio(id):
         text_output = merge_step(text_output, model_stream_for_output)
         return stream, text_output
 
-    speech_start = filter_spurious_speech_start_events_step(
-        speech_start, threshold_secs=0.5
+    speech_start_stream = filter_spurious_speech_start_events_step(
+        speech_start_stream, threshold_secs=1.5
     )
     stream, text_output = cancelable_substream_step(
         stream,
-        speech_start,
-        response_stream,
+        speech_start_stream,
+        create_response_substream,
         cancel_messages=[
             None,
             lambda: array_source([{"output": "..."}, ""]),
