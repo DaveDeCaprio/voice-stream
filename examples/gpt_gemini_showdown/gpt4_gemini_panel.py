@@ -87,13 +87,12 @@ class RoutingPromptTemplate(BaseChatPromptTemplate):
         recent_history = history[-4:] + [HumanMessage(content=query)]
 
         def format_message(message):
-            match message:
-                case HumanMessage(content=content):
-                    ret = f"Moderator: {content}"
-                case AIMessage(content=content):
-                    ret = content
-                case x:
-                    raise ValueError(f"Unknown message type: {type(x)}")
+            if isinstance(message, HumanMessage):
+                ret = f"Moderator: {message.content}"
+            elif isinstance(message, AIMessage):
+                ret = message.content
+            else:
+                raise ValueError(f"Unknown message type: {type(message)}")
             return ret
 
         prompt = "\n".join([format_message(_) for _ in recent_history])
@@ -129,22 +128,25 @@ class PanelDiscussionPromptTemplate(BaseChatPromptTemplate):
         # See - https://python.langchain.com/docs/integrations/chat/google_generative_ai
         # Gemini requires alternating human and AI messages and doesn't support system messages.
         for message in conversation:
-            match message:
-                case HumanMessage(content=content):
-                    current_human_content += f"Moderator: {content}\n"
-                case AIMessage(content=content) if content[
-                    : len(self.panel_model.value)
-                ] == self.panel_model.value:
-                    # AI message from this model
-                    current_human_content += f"{self.panel_model.value}: "
-                    messages.append(HumanMessage(content=current_human_content))
-                    current_human_content = ""
-                    messages.append(
-                        AIMessage(content=content[len(self.panel_model.value) + 2 :])
+            if isinstance(message, HumanMessage):
+                current_human_content += f"Moderator: {message.content}\n"
+            elif (
+                isinstance(message, AIMessage)
+                and message.content[: len(self.panel_model.value)]
+                == self.panel_model.value
+            ):
+                # AI message from this model
+                current_human_content += f"{self.panel_model.value}: "
+                messages.append(HumanMessage(content=current_human_content))
+                current_human_content = ""
+                messages.append(
+                    AIMessage(
+                        content=message.content[len(self.panel_model.value) + 2 :]
                     )
-                case AIMessage(content=content):
-                    # AI message from another model
-                    current_human_content += f"{content}\n"
+                )
+            elif isinstance(message, AIMessage):
+                # AI message from another model
+                current_human_content += f"{message.content}\n"
         current_human_content += f"{self.panel_model.value}: "
         messages.append(HumanMessage(content=current_human_content))
         return messages
