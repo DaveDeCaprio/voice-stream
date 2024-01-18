@@ -1,5 +1,9 @@
 # Phone
 
+Making automated phone calls using Twilio, VoiceStream, and LangChain is very easy.  This tutorial walks through making
+automated outgoing calls, but exactly the same endpoint can be used to handle incoming calls, it's just a bit different
+setup within Twilio.
+
 Follow the instructions below from the [GitHub example](https://github.com/DaveDeCaprio/voice-stream/tree/main/examples/twilio) directory.
 
 ```{include} ../../examples/twilio/README.md
@@ -7,7 +11,7 @@ Follow the instructions below from the [GitHub example](https://github.com/DaveD
 :end-before: "## Walkthrough"
 ```
 
-## Walkthrough
+## Twilio Walkthrough
 
 ### Initiating the call
 
@@ -108,7 +112,7 @@ and use that to close the stream.  We then wait on the two streams.
 ```{literalinclude} ../../examples/twilio/main.py
 :language: python
 :start-after: "# Handle Audio"
-:lines: 33-41
+:lines: 33-40
 ```
 
 ### Full Call Handler

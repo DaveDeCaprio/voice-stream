@@ -111,19 +111,20 @@ def test_full_chain():
     ]
     # config = {"callbacks": [ConsoleCallbackHandler()]}
     config = {}
-    results = [chain.invoke(query, config=config) for query in inputs]
+    results = [
+        chain.invoke({"query": query, "history": []}, config=config) for query in inputs
+    ]
     assert len(results) == 2
     logger.info("\n".join([str(_) for _ in results]))
 
 
 def test_panel_chain_streaming():
-    memory, chain = full_discussion_chain()
-    inputs = [
-        "Ok GPT, let's start with you.  What are your advantages?",
-        "Can you repeat that?",
-    ]
+    chain = full_discussion_chain()
     config = {}
-    gpt4_input = inputs[0]
+    gpt4_input = {
+        "query": "Ok GPT, let's start with you.  What are your advantages?",
+        "history": [],
+    }
     results = chain.stream(gpt4_input, config=config)
     for s in results:
         logger.info(s)
