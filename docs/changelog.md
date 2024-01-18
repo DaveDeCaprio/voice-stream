@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.8.0 (Jan 17, 2024)
+
+* Added LangChain memory steps
+* Added speaking rate to Google TTS step.
+* Added worked examples for llm_test_app and gemini_gpt4_showdown
+* Added Cookbooks for Interruptions and Phone Use Cases
+
 ## 0.7.0 (Jan 15, 2024)
 
 * Updated all docs and docstrings
