@@ -38,8 +38,10 @@ from voice_stream import (
     merge_step,
     filter_step,
     partition_step,
+    concat_step,
 )
 from voice_stream.audio import AudioFormat
+from voice_stream.core import single_source, recover_exception_step
 from voice_stream.integrations.google import (
     google_speech_step,
     TTSRequest,
@@ -51,6 +53,7 @@ from voice_stream.integrations.langchain import (
     langchain_save_memory_step,
 )
 from voice_stream.integrations.quart import quart_websocket_source, quart_websocket_sink
+from voice_stream.speech_to_text import first_partial_speech_result_step
 
 # Set up logging and turn off noisy logs
 logging.basicConfig(
@@ -166,7 +169,7 @@ async def audio(id):
     stream = quart_websocket_source()
     stream, audio_input = fork_step(stream)
 
-    stream, speech_start_stream = google_speech_step(
+    stream, speech_event_stream = google_speech_step(
         stream,
         current_app.speech_async_client,
         project=app.config["GCP_PROJECT_ID"],
@@ -188,6 +191,12 @@ async def audio(id):
         stream = langchain_load_memory_step(stream, memory)
         stream = log_step(stream, "LLM Input")
         stream = langchain_step(stream, chain, on_completion="")
+
+        def handle_exception(e):
+            logger.error(f"Langchain exception {e}", exc_info=True)
+            return {"output": "I'm not allowed to answer that."}
+
+        stream = recover_exception_step(stream, Exception, handle_exception)
         stream = filter_step(stream, lambda x: x != "" and ("history" not in x))
         stream = map_step(
             stream, lambda x: {"model": x["model"].value} if "model" in x else x
@@ -221,18 +230,18 @@ async def audio(id):
             model_stream_for_output, lambda x: {"model": x}
         )
         text_output = merge_step(text_output, model_stream_for_output)
+        text_output = concat_step(text_output, single_source(None))
         return stream, text_output
 
-    speech_start_stream = filter_spurious_speech_start_events_step(
-        speech_start_stream, threshold_secs=1.5
-    )
+    speech_event_stream = first_partial_speech_result_step(speech_event_stream)
+    speech_event_stream = log_step(speech_event_stream, "Interruption detected")
     stream, text_output = cancelable_substream_step(
         stream,
-        speech_start_stream,
+        speech_event_stream,
         create_response_substream,
         cancel_messages=[
             None,
-            lambda: array_source([{"output": "..."}, ""]),
+            lambda: array_source([{"output": "..."}, None]),
         ],
     )
 
@@ -244,8 +253,8 @@ async def audio(id):
     text_output = merge_step(text_input, text_output)
 
     text_output, memory_stream = fork_step(text_output)
-    text_output = filter_step(text_output, lambda x: x != "")
-    text_output = log_step(text_output, "Events")
+    text_output = filter_step(text_output, lambda x: x)
+    # text_output = log_step(text_output, "Events")
     text_output_done = queue_sink(text_output, current_streams[id].outbound)
 
     memory_stream = collect_dict_step(memory_stream)

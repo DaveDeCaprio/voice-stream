@@ -177,7 +177,7 @@ In summary, Google's Project Gemini is a groundbreaking development in AI, repre
     End of background on Gemini
     
     The queries you receive will be the output of speech recognition, and your responses will
-     be turned into speech using text-to-speech.  Keep your responses to a paragraph or so to avoid boring the listener, and
+     be turned into speech using text-to-speech.  Keep your responses short to avoid boring the listener, and
      don't use any special formatting that won't translate well as text to speech.
      Your tone should be witty and fun in a casual conversational tone,
      but with an underlying current of competitiveness.
@@ -193,12 +193,11 @@ def gemini_chain():
     OpenAI's GPT-4 model.   
 
      The queries you receive will be the output of speech recognition, and your responses will
-     be turned into speech using text-to-speech.  Keep your responses to a paragraph or so to avoid boring the listener, and
+     be turned into speech using text-to-speech.  Keep your responses short to avoid boring the listener, and
      don't use any special formatting that won't translate well as text to speech.
      Your tone should be witty and fun in a casual conversational tone,
      but with an underlying current of competitiveness.
-     
-     If you understand these instructions, reply with 'ok'
+
     """
     prompt = PanelDiscussionPromptTemplate(
         system_prompt=system_prompt,

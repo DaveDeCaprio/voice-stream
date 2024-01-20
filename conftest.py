@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
-
+print("LOADING TEST CONFIG")
 os.environ["PYTHONASYNCIODEBUG"] = "1"
 
 # Set up logging

@@ -13,8 +13,10 @@ from voice_stream import (
     substream_step,
     cancelable_substream_step,
     interruptable_substream_step,
+    concat_step,
 )
 from voice_stream._substream_iters import ResettableIterator, SwitchableIterator
+from voice_stream.substreams import exception_handling_substream
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +106,10 @@ async def test_cancellable_substream():
         instance_count = stream_instance
         stream_instance += 1
         async for item in iter:
+            logger.debug(f"Got item {item}")
             await asyncio.sleep(0.2)
-            yield f"Instance {instance_count}: {item}"
+            ret = f"Instance {instance_count}: {item}"
+            yield ret
 
     stream = cancelable_substream_step(generator(), cancel_generator(), create_stream)
     stream = log_step(stream, "Output")
@@ -202,3 +206,43 @@ async def test_interruptable_substream_step():
         "Substream 2 Output 1: 3",
         "Substream 2 Output 2: 3",
     ]
+
+
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)s - %(message)s"
+)
+
+
+@pytest.mark.asyncio
+async def test_exception_handling_substream_no_error():
+    stream = array_source([1, 2, 3])
+
+    def new_sub(stream):
+        stream = log_step(stream, "In sub")
+        return map_step(stream, lambda x: x + 1)
+
+    stream = exception_handling_substream(stream, new_sub, [lambda x: x])
+    out = await array_sink(stream)
+    assert out == [2, 3, 4]
+
+
+@pytest.mark.asyncio
+async def test_exception_handling_substream():
+    async def gen():
+        yield 1
+        yield 2
+        yield 3
+        yield 4
+
+    async def sub_with_ex(stream):
+        async for item in stream:
+            if item == 3:
+                raise ValueError("3 is not allowed")
+            yield item
+
+    stream = gen()
+    stream = exception_handling_substream(
+        stream, sub_with_ex, [lambda x: [f"Error {x.args[0]}"]]
+    )
+    out = await array_sink(stream)
+    assert out == [1, 2, "Error 3 is not allowed", 4]

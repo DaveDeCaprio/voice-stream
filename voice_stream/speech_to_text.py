@@ -3,8 +3,10 @@ import datetime
 import logging
 from typing import AsyncIterator, Callable, Tuple
 
+import asyncstdlib
+
 from voice_stream.core import log_step
-from voice_stream.events import SpeechStart, BaseEvent, SpeechEnd
+from voice_stream.events import SpeechStart, BaseEvent, SpeechEnd, SpeechPartialResult
 
 logger = logging.getLogger(__name__)
 
@@ -139,3 +141,51 @@ def filter_spurious_speech_start_events_step(
     stream = WaitingIterator()
     stream = log_step(stream, "New Speech Detected", lambda x: x.time_since_start)
     return stream
+
+
+async def first_partial_speech_result_step(
+    async_iter: AsyncIterator[BaseEvent],
+) -> AsyncIterator[SpeechPartialResult]:
+    """
+    Data flow step that returns the first partial result after speech starts.
+
+    This step uses partial results from the speech recognizer to signal the start of speech.  It waits for a
+    :class:`~voice_stream.events.SpeechStart` event and then returns the first
+    :class:`~voice_stream.events.SpeechPartialResult` that occurs after that.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[voice_stream.events.BaseEvent]
+        An asynchronous iterator of Speech events
+
+    Returns
+    -------
+    async_iter : AsyncIterator[voice_stream.events.SpeechPartialResult]
+        The input stream filtered for just the first partial result after each speech start event.
+
+    Example
+    -------
+    >>> async def gen():
+    ...     yield SpeechStart(time_since_start=1)
+    ...     yield SpeechEnd(time_since_start=2)
+    ...     yield SpeechPartialResult(text="hello", time_since_start=1.5)
+    ...     yield SpeechPartialResult(text="hello world", time_since_start=2)
+    ...     yield SpeechStart(time_since_start=1)
+    ...     yield SpeechPartialResult(text="next", time_since_start=2.5)
+    >>> stream = gen()
+    >>> stream = first_partial_speech_result_step(stream)
+    >>> out = await array_sink(stream)
+    >>> assert out == [
+    ...     SpeechPartialResult(text="hello", time_since_start=1.5),
+    ...     SpeechPartialResult(text="next", time_since_start=2.5)
+    ... ]
+    """
+    started = False
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            if started:
+                if isinstance(item, SpeechPartialResult):
+                    started = False
+                    yield item
+            elif isinstance(item, SpeechStart):
+                started = True

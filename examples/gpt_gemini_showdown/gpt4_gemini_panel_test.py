@@ -5,6 +5,7 @@ import pytest
 from langchain.memory import ConversationBufferMemory
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from examples.gpt_gemini_showdown.gpt4_gemini_panel import (
     PanelModels,

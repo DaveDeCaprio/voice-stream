@@ -16,6 +16,8 @@ from voice_stream.core import (
     queue_source,
     concat_step,
     empty_sink,
+    recover_exception_step,
+    log_step,
 )
 from voice_stream.types import (
     T,
@@ -133,7 +135,7 @@ def cancelable_substream_step(
 
     Calls the `substream_func` to create a new substream for each item from the source iterator.  If any item is produced
     from the `cancel_iter` during the processing of this substream, the substream is immediately stopped.  When a stop occurs,
-    `cancel_messages` are optionally sent down each stream.
+    `cancel_messages` are optionally sent down each output stream.
 
     Parameters
     ----------
@@ -177,14 +179,14 @@ def cancelable_substream_step(
                         output_iters, cancel_messages
                     )
                     completed_outputs = 0
-                    for o, c in zip(output_iters, cancel_iters):
-                        o.switch(c)
+                    logger.debug("Substream canceled - sending cancel messages.")
+                    _switch_outputs(output_iters, cancel_iters)
                 else:
                     logger.debug(
                         "Ignoring cancel because there is no active substream."
                     )
             except Exception as e:
-                logger.error(f"Error in cancelable_substream: {e}")
+                logger.error(f"Error in cancelable_substream: {e}", exc_info=True)
 
     def on_output_complete():
         # logger.debug("on_output_complete")
@@ -230,7 +232,7 @@ def cancelable_substream_step(
 
 
 def interruptable_substream_step(
-    async_iterator: AsyncIterator[T],
+    async_iter: AsyncIterator[T],
     substream_func: Callable[
         [AsyncIterator[T]],
         Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
@@ -282,7 +284,7 @@ def interruptable_substream_step(
 
     async def gen():
         nonlocal active_source, next_source, next_substream, completed_outputs
-        async for item in async_iterator:
+        async for item in async_iter:
             if active_source:
                 if cancel_messages and completed_outputs < len(output_iters):
                     cancel_iters = _create_cancel_messages(
@@ -307,6 +309,49 @@ def interruptable_substream_step(
     logger.debug("Creating task")
     asyncio.create_task(gen())
     return from_tuple(output_iters)
+
+
+def exception_handling_substream(
+    async_iterator: AsyncIterator[T],
+    substream_func: Callable[
+        [AsyncIterator[T]],
+        Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
+    ],
+    exception_handlers: List[Callable[[BaseException], List[Any]]],
+):
+    def new_substreams():
+        substreams = to_tuple(substream_func(async_iterator))
+        return [
+            recover_exception_step(
+                stream, Exception, lambda x: exception_received(x, ix)
+            )
+            for ix, stream in enumerate(substreams)
+        ]
+
+    async def exception_received(e, ix):
+        # When an exception is received, recreate the stream and reset the outputs.
+        nonlocal substreams
+        substreams = new_substreams()
+        exeception_result = exception_handlers[ix](e)
+        assert len(exeception_result) == len(
+            substreams
+        ), "The exception handler must return a list of outputs, one for each output stream."
+        substreams = [
+            concat_step(to_source(result), stream)
+            for result, stream in zip(exeception_result, substreams)
+        ]
+        _switch_outputs(output_iters, substreams)
+        for i in output_iters:
+            await i.wait_for_state_change()
+        return None
+
+    substreams = new_substreams()
+    output_iters = [
+        SwitchableIterator(s, propagate_end_of_iter=True) for s in substreams
+    ]
+
+    ret = from_tuple(output_iters)
+    return ret
 
 
 def _create_cancel_messages(

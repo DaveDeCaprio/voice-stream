@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 from asyncio import InvalidStateError
-from typing import AsyncIterator, Any, TypeVar
+from typing import AsyncIterator, Any, TypeVar, Optional
 
 from voice_stream.types import is_async_iterator
 
@@ -114,7 +114,7 @@ class SwitchableIterator:
 
     def __init__(
         self,
-        async_iter: AsyncIterator,
+        async_iter: Optional[AsyncIterator],
         callback=None,
         propagate_end_of_iter: bool = True,
     ):
@@ -124,6 +124,7 @@ class SwitchableIterator:
             else SwitchableIterator.DISCONNECTED
         )
         self.state_change_event = asyncio.Event()
+        self.state_change_completed_event = asyncio.Event()
         self.async_iter = async_iter
         self.callback = callback
         self.propagate_end_of_iter = propagate_end_of_iter
@@ -135,7 +136,9 @@ class SwitchableIterator:
     async def __anext__(self):
         # logger.debug(f"Entering SwitchableIterator.__anext__ {self}")
         while True:
+            # logger.debug(f"Looping with state {self.state}")
             self.state_change_event.clear()
+            self.state_change_completed_event.set()
             try:
                 if self.state == SwitchableIterator.DISCONNECTED:
                     await self.state_change_event.wait()
@@ -151,6 +154,7 @@ class SwitchableIterator:
                         {next_item_task, state_change_task},
                         return_when=asyncio.FIRST_COMPLETED,
                     )
+                    # logger.debug(f"Switchable iterator - Done: {done} Pending: {pending}")
                     for task in pending:
                         task.cancel()
                         try:
@@ -163,18 +167,24 @@ class SwitchableIterator:
                         try:
                             return await next_item_task
                         except StopAsyncIteration as e:
+                            # logger.debug(f"Substream completed")
                             if self.callback:
                                 self.callback()
                             if self.propagate_end_of_iter:
                                 raise e
                             # If we aren't propagating the end, disconnect the iterator.
                             self.disconnect()
+                    else:
+                        # logger.debug(f"Iterators switched during __anext__()")
+                        pass
             finally:
                 self.state_change_event.clear()
+                self.state_change_completed_event.set()
 
     def end_iteration(self):
         self.state = SwitchableIterator.COMPLETED
         self.async_iter = None
+        self.state_change_completed_event.clear()
         self.state_change_event.set()
 
     def switch(self, async_iter: AsyncIterator):
@@ -187,6 +197,7 @@ class SwitchableIterator:
             raise InvalidStateError("Cannot switch a completed iterator")
         self.state = SwitchableIterator.CONNECTED
         self.async_iter = async_iter
+        self.state_change_completed_event.clear()
         self.state_change_event.set()
 
     def disconnect(self):
@@ -195,4 +206,8 @@ class SwitchableIterator:
             raise InvalidStateError("Cannot disconnect a completed iterator")
         self.state = SwitchableIterator.DISCONNECTED
         self.async_iter = None
+        self.state_change_completed_event.clear()
         self.state_change_event.set()
+
+    async def wait_for_state_change(self):
+        await self.state_change_completed_event.wait()

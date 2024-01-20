@@ -23,7 +23,7 @@ from voice_stream.audio import (
     ogg_page_separator_step,
     ogg_concatenator_step,
 )
-from voice_stream.events import SpeechStart, SpeechEnd
+from voice_stream.events import SpeechStart, SpeechEnd, SpeechPartialResult
 from voice_stream.integrations.google import (
     google_speech_step,
     google_text_to_speech_step,
@@ -54,7 +54,7 @@ async def test_google_speech():
         audio_format=AudioFormat.WAV_MULAW_8KHZ,
     )
     out = await array_sink(stream)
-    assert out == ["testing 1 2 3 testing 1 2 3"]
+    assert out == ["Testing 1 2 3 testing 1 2 3."]
 
 
 @pytest.mark.asyncio
@@ -101,10 +101,13 @@ async def test_google_speech_with_events():
     out = await array_sink(stream)
     events = await array_sink(events)
     logger.info(events)
-    assert out == ["testing 1 2 3 testing 1 2 3"]
-    assert events == [
+    assert out == ["Testing 1 2 3 testing 1 2 3."]
+    assert events[:3] == [
         SpeechStart(time_since_start=1.29),
         SpeechEnd(time_since_start=4.5),
+        SpeechPartialResult(
+            event_name="speech_end", text="test", time_since_start=1.83
+        ),
     ]
 
 
@@ -141,9 +144,10 @@ async def test_google_speech_v1_with_events():
     events = await array_sink(events)
     logger.info(events)
     assert out == ["Testing 1 2 3 testing 1 2 3."]
-    assert events == [
+    assert events[:3] == [
         SpeechStart(time_since_start=1.38),
         SpeechEnd(time_since_start=4.46),
+        SpeechPartialResult(text="test", time_since_start=1.86),
     ]
 
 

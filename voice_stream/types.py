@@ -48,6 +48,7 @@ def to_source(x: SourceConvertable) -> AsyncIterator[T]:
     To create a source that explicitly yields `None`, pass lambda x: none_source()
     """
     if callable(x):
+        # logger.debug("Callable source")
         return x()
     elif x is None:
         # logger.debug("Empty source")
@@ -55,7 +56,7 @@ def to_source(x: SourceConvertable) -> AsyncIterator[T]:
 
         return empty_source()
     else:
-        # logger.debug("Single source")
+        # logger.debug(f"Single source {x}")
         from voice_stream.core import single_source
 
         return single_source(x)
@@ -115,7 +116,7 @@ def map_future(f: Future[T], func: Callable[[T], Output]) -> Future[Output]:
 
 async def resolve_awaitable_or_obj(obj: AwaitableOrObj[T]) -> T:
     """Returns the result of an object or a future"""
-    if isinstance(obj, asyncio.Future):
+    if inspect.isawaitable(obj):
         return await obj
     return obj
 

@@ -36,6 +36,19 @@ class SpeechEnd(BaseEvent):
     """Always 'speech_end'"""
 
 
+class SpeechPartialResult(BaseEvent):
+    """
+    Provides partial results from a speech recognizer.
+    """
+
+    text: str
+    """Partial text returned."""
+    time_since_start: float
+    """The time when the speech ends (in seconds) relative to the start of the audio."""
+    event_name: str = "speech_end"
+    """Always 'speech_partial_result'"""
+
+
 class TimedText(BaseEvent):
     """
     Represents text synchronized to an audio stream. Used for rate-limited output of TextToSpeech.

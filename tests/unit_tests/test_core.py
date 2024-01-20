@@ -268,11 +268,13 @@ async def test_recover_exception_step():
     def set_raised(x):
         nonlocal raised
         raised = x
+        return 4
 
     stream = _source_with_exception()
     stream = recover_exception_step(stream, KeyError, set_raised)
     out = await array_sink(stream)
     assert raised.args[0] == "Test"
+    assert out == [1, 2, 3, 4]
 
 
 @pytest.mark.asyncio

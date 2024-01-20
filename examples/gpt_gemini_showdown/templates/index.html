@@ -3,16 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPT-4/Gemini Panel Discussion</title>
+    <title>GPT-4/Gemini Showdown</title>
     <style>
+        .top-section {
+            display: flex;
+            align-items: center; /* Aligns items vertically in the center */
+            justify-content: space-between; /* Spreads out the items */
+        }
         .container {
             text-align: center;
-            margin-top: 50px;
+            margin-top: 5px;
         }
         .message-input {
             margin-bottom: 20px;
             width: 300px; /* Width of the text area */
             height: 100px; /* Height of the text area */
+        }
+
+        .splash-image {
+            /* Add styling as needed, e.g., size of the images */
+            width: 300px;
+            height: auto;
         }
 
         .button {
@@ -33,23 +44,29 @@
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>GPT-4 vs. Gemini</h1>
-    <div>
-        <input type="radio" id="text" name="mode" value="text" checked onclick="toggleMode('text')">
-        <label for="text">Text</label>
-        <input type="radio" id="voice" name="mode" value="voice" onclick="toggleMode('voice')">
-        <label for="voice">Voice</label>
-    </div>
+<div>
+    <div class="top-section">
+        <img src="/static/splash.png" alt="Left Splash Image" class="splash-image">
+        <div class="container">
+            <h1>GPT-4 vs. Gemini Showdown</h1>
+            <div>
+                <input type="radio" id="text" name="mode" value="text" onclick="toggleMode('text')">
+                <label for="text">Text</label>
+                <input type="radio" id="voice" name="mode" value="voice" checked onclick="toggleMode('voice')">
+                <label for="voice">Voice</label>
+            </div>
 
-    <div id="text-inputs">
-        <textarea class="message-input" id="messageText" autocomplete="off"></textarea>
-        <button onclick="sendChatMessage()">Submit</button>
-    </div>
+            <div id="text-inputs" style="display: none;">
+                <textarea class="message-input" id="messageText" autocomplete="off"></textarea>
+                <button onclick="sendChatMessage()">Submit</button>
+            </div>
 
-    <div id="voice-inputs" style="display: none;">
-        <button id="audio-button-start" onclick="startAudio()">Start Audio</button>
-        <button id="audio-button-stop" onclick="stopAudio()" hidden="true">Stop Audio</button>
+            <div id="voice-inputs">
+                <button id="audio-button-start" onclick="startAudio()">Start Audio</button>
+                <button id="audio-button-stop" onclick="stopAudio()" hidden="true">Stop Audio</button>
+            </div>
+        </div>
+        <img src="/static/splash.png" alt="Right Splash Image" class="splash-image">
     </div>
     <div>
         <audio id="audio-player"></audio>

@@ -877,7 +877,11 @@ async def recover_exception_step(
             async for item in owned_aiter:
                 yield item
     except exception_type as e:
-        yield to_source(exception_handler(e))
+        eh = await resolve_awaitable_or_obj(exception_handler(e))
+        handler_iter = to_source(eh)
+        async with asyncstdlib.scoped_iter(handler_iter) as owned_aiter:
+            async for item in owned_aiter:
+                yield item
 
 
 async def log_step(
