@@ -751,6 +751,7 @@ def async_init_step(
         def __init__(self, init_event):
             self.iter = None
             self.init_event = init_event
+            self.init_exception: Optional[Exception] = None
 
         def __aiter__(self):
             return self
@@ -758,18 +759,24 @@ def async_init_step(
         async def __anext__(self):
             if not self.iter:
                 await self.init_event.wait()
+                if self.init_exception:
+                    raise self.init_exception
             return await self.iter.__anext__()
 
     init_event = asyncio.Event()
     outputs = [AsyncInitOutputIterator(init_event) for _ in range(num_outputs)]
 
     async def do_init():
-        input = AsyncInitInputIterator()
-        step = await f(input)
-
-        for output, iterable in zip(outputs, to_tuple(step)):
-            output.iter = iterable.__aiter__()
-        init_event.set()
+        try:
+            input = AsyncInitInputIterator()
+            step = await f(input)
+            for output, iterable in zip(outputs, to_tuple(step)):
+                output.iter = iterable.__aiter__()
+        except Exception as e:
+            for output in outputs:
+                output.init_exception = e
+        finally:
+            init_event.set()
 
     asyncio.create_task(do_init())
 

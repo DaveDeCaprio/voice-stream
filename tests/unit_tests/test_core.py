@@ -117,6 +117,19 @@ async def test_async_init_step():
 
 
 @pytest.mark.asyncio
+async def test_async_init_step_with_failure_in_init():
+    async def delayed_init(async_iter: AsyncIterator):
+        await asyncio.sleep(0.1)
+        raise ValueError("Test")
+
+    source = array_source(range(2))
+    a = async_init_step(source, delayed_init)
+    with pytest.raises(ValueError) as e:
+        a = await array_sink(a)
+    assert e.value.args[0] == "Test"
+
+
+@pytest.mark.asyncio
 async def test_async_init_step_with_future():
     async def increment_by_future(async_iter: AsyncIterator, inc_f: Future[int]):
         inc = await inc_f

@@ -4,7 +4,7 @@ import os
 import pytest
 from google.api_core.client_options import ClientOptions
 from google.cloud.speech_v1 import SpeechAsyncClient as SpeechAsyncClientV1
-from google.cloud.speech_v2 import SpeechAsyncClient
+from google.cloud.speech_v2 import SpeechAsyncClient, StreamingRecognizeRequest
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
 
 from tests.helpers import assert_files_equal, example_file
@@ -15,6 +15,8 @@ from voice_stream import (
     binary_file_sink,
     log_step,
     map_step,
+    concat_step,
+    async_init_step,
 )
 from voice_stream.audio import (
     wav_mulaw_file_source,
@@ -28,7 +30,9 @@ from voice_stream.integrations.google import (
     google_speech_step,
     google_text_to_speech_step,
     google_speech_v1_step,
+    _initial_recognition_config,
 )
+from voice_stream.substreams import exception_handling_substream
 
 logger = logging.getLogger(__name__)
 
@@ -215,3 +219,60 @@ async def test_google_text_to_speech_mp3(tmp_path):
     target = tmp_path.joinpath("tts.mp3")
     await binary_file_sink(stream, target)
     assert_files_equal(example_file("tts.mp3"), target, mode="b")
+
+
+@pytest.mark.asyncio
+async def test_google_speech_exception():
+    logger.debug("Start")
+    speech_async_client = SpeechAsyncClient(
+        client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
+    )
+    project = os.environ["GCP_PROJECT_ID"]
+    location = os.environ["GCP_SPEECH_LOCATION"]
+    recognizer = os.environ["GCP_TELEPHONE_SPEECH_RECOGNIZER"]
+    stream = binary_file_source(example_file("testing.webm"), chunk_size=500)
+
+    def map_audio(x):
+        return StreamingRecognizeRequest(recognizer=recognizer, audio=x)
+
+    stream = log_step(stream, "Audio", lambda x: len(x))
+    stream = map_step(stream, map_audio)
+    initial_config = _initial_recognition_config(
+        False,
+        project,
+        location,
+        recognizer,
+    )
+
+    async def wrapper(stream):
+        try:
+            async for item in stream:
+                logger.debug(f"Wrapped")
+                yield item
+        except Exception as e:
+            logger.exception(f"Error!!!! {e}")
+            raise e
+        finally:
+            logger.info(f"Wrapped ended")
+
+    async def recognize_step(stream):
+        logger.info("Initializing new recognize step")
+        config = array_source([initial_config])
+        stream = concat_step(config, stream)
+        return await speech_async_client.streaming_recognize(
+            wrapper(stream), timeout=0.1
+        )
+
+    def recognize_substream(stream):
+        return async_init_step(stream, recognize_step)
+
+    def handle_exception(e):
+        logger.error(f"Google Recognize aborted. {e}", exc_info=e)
+        return [None]
+
+    stream = exception_handling_substream(
+        stream, recognize_substream, [handle_exception], max_exceptions=10
+    )
+    # stream = async_init_step(stream, speech_async_client.streaming_recognize)
+    out = await array_sink(stream)
+    assert out == []

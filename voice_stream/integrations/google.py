@@ -6,7 +6,6 @@ import logging
 from typing import AsyncIterator, Union, Tuple
 
 import asyncstdlib
-from google.api_core.exceptions import Aborted
 from google.cloud.speech_v1 import (
     SpeechAsyncClient as SpeechAsyncClientV1,
     StreamingRecognizeRequest as StreamingRecognizeRequestV1,
@@ -41,16 +40,16 @@ from voice_stream.core import (
     concat_step,
     byte_buffer_step,
     chunk_bytes_step,
-    recover_exception_step,
     partition_step,
     async_init_step,
-    log_step,
+    empty_source,
 )
 from voice_stream.events import SpeechStart, SpeechEnd, BaseEvent, SpeechPartialResult
 from voice_stream.integrations.google_utils import (
     _resolve_audio_decoding,
     GoogleDecodingConfig,
 )
+from voice_stream.substreams import exception_handling_substream
 from voice_stream.text_to_speech import AudioWithText
 
 # Can be one of the standard audio formats or a Google AudioConfig object
@@ -141,6 +140,7 @@ def google_speech_step(
     language_codes: Union[str, list[str]] = ["en-US", "es-US"],
     audio_format: GoogleDecodingConfig = None,
     include_events: bool = False,
+    max_minutes: int = 9,
 ) -> Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[BaseEvent]]]:
     """
     Data flow step for converting audio into text using Google Cloud Speech-to-Text V2 API.
@@ -173,6 +173,8 @@ def google_speech_step(
         Optional configuration for audio decoding. Not required if the recognizer auto-detects the format.
     include_events : bool, optional
         If True, the function also returns a stream of speech recognition events. Default is False.
+    max_minutes : int, optional
+        The maximum number of minutes to process.  Default is 9.
 
     Returns
     -------
@@ -200,13 +202,14 @@ def google_speech_step(
     def map_audio(x):
         return StreamingRecognizeRequest(recognizer=recognizer, audio=x)
 
-    return _run_google_speech(
+    return _google_speech_stream(
         async_iter,
         include_events,
         map_audio,
         initial_config,
         speech_async_client,
         _map_speech_events,
+        max_minutes=max_minutes,
     )
 
 
@@ -217,6 +220,7 @@ def google_speech_v1_step(
     model: str = "latest_long",
     language_code: str = "en-US",
     include_events: bool = False,
+    max_minutes: int = 9,
 ) -> AsyncIterator[str]:
     """
     Data flow step for converting audio into text using Google Cloud Speech-to-Text V1 API.
@@ -241,6 +245,8 @@ def google_speech_v1_step(
         The language code(s) for the recognizer. Default is "en-US".
     include_events : bool, optional
         If True, the function also returns a stream of speech recognition events. Default is False.
+    max_minutes : int, optional
+        The maximum number of minutes to process.  Default is 9.
 
     Returns
     -------
@@ -265,38 +271,44 @@ def google_speech_v1_step(
     def map_audio(x):
         return StreamingRecognizeRequestV1(audio_content=x)
 
-    return _run_google_speech(
+    return _google_speech_stream(
         async_iter,
         include_events,
         map_audio,
         initial_config,
         speech_async_client,
         _map_speech_events_v1,
+        max_minutes=max_minutes,
     )
 
 
-def _run_google_speech(
+def _google_speech_stream(
     async_iter: AsyncIterator[bytes],
     include_events: bool,
     map_audio,
     initial_config,
     speech_async_client,
     map_events,
+    max_minutes: int,
 ):
     MAX_STREAM_SIZE = 25600
     stream = async_iter
     stream = byte_buffer_step(stream)
     stream = chunk_bytes_step(stream, MAX_STREAM_SIZE)
     stream = map_step(stream, map_audio)
-    config = array_source([initial_config])
-    stream = concat_step(config, stream)
-    stream = async_init_step(stream, speech_async_client.streaming_recognize)
+
+    def recognize_substream(stream):
+        config = array_source([initial_config])
+        stream = concat_step(config, stream)
+        return async_init_step(stream, speech_async_client.streaming_recognize)
 
     def handle_exception(e):
-        logger.error(f"Google Recognize aborted. {e}")
-        return "Um"
+        logger.error(f"Google Recognize aborted. {e}", exc_info=e)
+        return [None]
 
-    stream = recover_exception_step(stream, Aborted, handle_exception)
+    stream = exception_handling_substream(
+        stream, recognize_substream, [handle_exception], max_exceptions=max_minutes // 5
+    )
 
     def split_events(x):
         try:

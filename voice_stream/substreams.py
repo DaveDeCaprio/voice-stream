@@ -18,6 +18,7 @@ from voice_stream.core import (
     empty_sink,
     recover_exception_step,
     log_step,
+    empty_source,
 )
 from voice_stream.types import (
     T,
@@ -318,17 +319,41 @@ def exception_handling_substream(
         Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
     ],
     exception_handlers: List[Callable[[BaseException], List[Any]]],
+    max_exceptions: Optional[int] = None,
 ):
+    exception_count = 0
+    end_of_iter = False
+
+    async def mark_end_of_iter(aiter):
+        try:
+            async for item in aiter:
+                yield item
+        finally:
+            nonlocal end_of_iter
+            end_of_iter = True
+
+    async_iterator = mark_end_of_iter(async_iterator)
+
     def new_substreams():
-        substreams = to_tuple(substream_func(async_iterator))
-        return [
-            recover_exception_step(
-                stream, Exception, lambda x: exception_received(x, ix)
-            )
-            for ix, stream in enumerate(substreams)
-        ]
+        if end_of_iter:
+            return [empty_source() for _ in range(len(output_iters))]
+        else:
+            substreams = to_tuple(substream_func(async_iterator))
+            return [
+                recover_exception_step(
+                    stream, Exception, lambda x: exception_received(x, ix)
+                )
+                for ix, stream in enumerate(substreams)
+            ]
 
     async def exception_received(e, ix):
+        nonlocal exception_count
+        exception_count += 1
+        if max_exceptions and exception_count > max_exceptions:
+            logger.info(
+                f"Exceeded the maximum of {max_exceptions} exception retries.  Throwing exception"
+            )
+            raise e
         # When an exception is received, recreate the stream and reset the outputs.
         nonlocal substreams
         substreams = new_substreams()

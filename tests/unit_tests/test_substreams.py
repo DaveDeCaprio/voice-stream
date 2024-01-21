@@ -246,3 +246,26 @@ async def test_exception_handling_substream():
     )
     out = await array_sink(stream)
     assert out == [1, 2, "Error 3 is not allowed", 4]
+
+
+@pytest.mark.asyncio
+async def test_exception_handling_substream_max_exceptions():
+    async def gen():
+        yield 1
+        yield 2
+        yield 3
+        yield 4
+
+    async def sub_with_ex(stream):
+        async for item in stream:
+            if item % 2 == 1:
+                raise ValueError(f"no odd numbers. Got {item}")
+            yield item
+
+    stream = gen()
+    stream = exception_handling_substream(
+        stream, sub_with_ex, [lambda x: [f"Error {x.args[0]}"]], max_exceptions=1
+    )
+    with pytest.raises(ValueError) as e:
+        await array_sink(stream)
+    assert e.value.args[0] == "no odd numbers. Got 3"
