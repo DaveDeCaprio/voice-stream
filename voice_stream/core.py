@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import json
 import logging
-from asyncio import QueueEmpty
+from asyncio import QueueEmpty, CancelledError
 from typing import (
     AsyncIterator,
     Any,
@@ -650,6 +650,36 @@ async def collect_dict_step(async_iter: AsyncIterator[dict]) -> AsyncIterator[di
                 buffer = {}
 
 
+async def delay_step(
+    async_iter: AsyncIterator[T], delay_secs: float
+) -> AsyncIterator[T]:
+    """
+    Data flow step that imposes a deplay on items coming in.
+
+    This step simply adds a fixed delay to the items from the incoming iterator.  Mainly useful for testing.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An asynchronous iterator
+    delay : float
+        The number of seconds to sleep between each item
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An asynchronous iterator yielding the items coming from the input iterator with a delay.
+    """
+
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            try:
+                await asyncio.sleep(delay_secs)
+            except CancelledError as e:
+                pass
+            yield item
+
+
 async def flatten_step(
     async_iter: AsyncIterator[Union[Iterable[T], AsyncIterator[T]]],
 ) -> AsyncIterator[T]:
@@ -884,15 +914,20 @@ async def recover_exception_step(
             async for item in owned_aiter:
                 yield item
     except exception_type as e:
+        logger.debug("Recover exception step moving into handler")
         eh = await resolve_awaitable_or_obj(exception_handler(e))
         handler_iter = to_source(eh)
         async with asyncstdlib.scoped_iter(handler_iter) as owned_aiter:
             async for item in owned_aiter:
                 yield item
+        logger.debug("Recover exception step completed handler")
 
 
 async def log_step(
-    async_iter: AsyncIterator[T], name: str, formatter: Callable[[T], Any] = lambda x: x
+    async_iter: AsyncIterator[T],
+    name: str,
+    formatter: Callable[[T], Any] = lambda x: x,
+    every_nth_message: Optional[int] = None,
 ) -> AsyncIterator[T]:
     """
     Data flow step that prints using the Python logger.
@@ -909,6 +944,10 @@ async def log_step(
         A name to prepend to each logged message for identification.
     formatter : Callable[[T], Any], optional
         A function to format each item before logging. Defaults to a function that returns the item unchanged.
+    every_nth_message : Optional[int]
+        Indicates that the log should only happen every nth message.  The first message will always cause a log message,
+        and then every nth message after the first.  For example, if the value is 10, then the 1st, 11th, 22nd, etc.
+        messages will be logged.
 
     Returns
     -------
@@ -924,10 +963,16 @@ async def log_step(
     Value squared: 4
     Value squared: 9
     """
+    count = 0
+    log = True
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
-            formatted = formatter(item)
-            logger.info(f"{name}: {formatted}")
+            if every_nth_message:
+                count += 1
+                log = count % every_nth_message == 1
+            if log:
+                formatted = formatter(item)
+                logger.info(f"{name}: {formatted}")
             yield item
 
 
@@ -1477,36 +1522,38 @@ def buffer_step(
     task = asyncio.create_task(queue.enqueue_iterator(async_iter))
 
     async def make_iterator() -> AsyncIterator[T]:
-        ongoing = True
-        while ongoing:
-            # Use a blocking get() to ensure there's at least one chunk of
-            # data, and stop iteration if the chunk is None, indicating the
-            # end of the audio stream.
-            try:
-                item = await queue.get()
-                if item == EndOfStreamMarker:
-                    # logger.debug(f"End of queue")
-                    return
-                data = [item]
-            except asyncio.CancelledError:
-                # logger.debug(f"ByteBuffer cancelled")
-                return
-            # Now consume whatever other data's still buffered.
-            while True:
+        try:
+            ongoing = True
+            while ongoing:
+                # Use a blocking get() to ensure there's at least one chunk of
+                # data, and stop iteration if the chunk is None, indicating the
+                # end of the audio stream.
                 try:
-                    chunk = queue.get_nowait()
-                    if chunk == EndOfStreamMarker:
-                        # logger.debug(f"Got None in nowait")
-                        ongoing = False
+                    item = await queue.get()
+                    if item == EndOfStreamMarker:
+                        # logger.debug(f"End of queue")
+                        return
+                    data = [item]
+                except asyncio.CancelledError:
+                    # logger.debug(f"ByteBuffer cancelled")
+                    return
+                # Now consume whatever other data's still buffered.
+                while True:
+                    try:
+                        chunk = queue.get_nowait()
+                        if chunk == EndOfStreamMarker:
+                            # logger.debug(f"Got None in nowait")
+                            ongoing = False
+                            break
+                        data.append(chunk)
+                    except QueueEmpty:
+                        # logger.debug(f"Got QueueEmpty in nowait")
                         break
-                    data.append(chunk)
-                except QueueEmpty:
-                    # logger.debug(f"Got QueueEmpty in nowait")
-                    break
-            out = join_func(data)
-            # logger.debug(f"Joining {data} {out}")
-            yield out
-        task.cancel()
+                out = join_func(data)
+                # logger.debug(f"Joining {data} {out}")
+                yield out
+        finally:
+            task.cancel()
 
     return make_iterator()
 

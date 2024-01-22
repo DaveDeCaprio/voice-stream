@@ -59,35 +59,41 @@ class ResettableIterator(AsyncIterator):
         self.async_iter = async_iter
         self.reset_flag = asyncio.Event()
         self.next_item_task = None
+        self.lock = asyncio.Lock()
 
     def __aiter__(self):
         return self
 
     async def __anext__(self):
-        # logger.trace(f"Entering __anext__")
-        if self.reset_flag.is_set():
-            # logger.trace(f"Reset flag set on entry")
-            raise StopAsyncIteration
-        if self.next_item_task is None:
-            self.next_item_task = asyncio.create_task(self.async_iter.__anext__())
-        reset_task = asyncio.create_task(self.reset_flag.wait())
-        done, pending = await asyncio.wait(
-            {self.next_item_task, reset_task}, return_when=asyncio.FIRST_COMPLETED
-        )
-        # logger.trace(f"Tasks completed: Done is {done}.  Pending is {pending}")
-        if reset_task in done:
-            # logger.debug(f"Reset flag set on wait")
-            raise StopAsyncIteration
-        assert reset_task in pending and self.next_item_task in done
-        reset_task.cancel()
-        out = await self.next_item_task
-        self.next_item_task = None
-        return out
+        async with self.lock:
+            # logger.trace(f"Entering __anext__")
+            assert (
+                not self.reset_flag.is_set()
+            ), f"Reset flag should be set on entry.  ResettableIterator isn't multithreaded"
+            if self.next_item_task is None:
+                self.next_item_task = asyncio.create_task(self.async_iter.__anext__())
+            reset_task = asyncio.create_task(self.reset_flag.wait())
+            done, pending = await asyncio.wait(
+                {self.next_item_task, reset_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            # logger.trace(f"Tasks completed: Done is {done}.  Pending is {pending}")
+            if reset_task in done:
+                logger.debug(f"Reset flag set on wait")
+                raise StopAsyncIteration
+            assert reset_task in pending and self.next_item_task in done
+            reset_task.cancel()
+            out = await self.next_item_task
+            self.next_item_task = None
+            return out
 
     def reset(self):
         self.reset_flag.set()
         # It's important that we create a new event because we don't know if __anext__ will be called again before the original event is cleared.
         self.reset_flag = asyncio.Event()
+
+    async def confirm_reset(self):
+        async with self.lock:
+            return True
 
 
 class SwitchableIterator:
@@ -135,6 +141,7 @@ class SwitchableIterator:
 
     async def __anext__(self):
         # logger.debug(f"Entering SwitchableIterator.__anext__ {self}")
+        log_next_iter = False
         while True:
             # logger.debug(f"Looping with state {self.state}")
             self.state_change_event.clear()
@@ -150,11 +157,17 @@ class SwitchableIterator:
                     state_change_task = asyncio.create_task(
                         self.state_change_event.wait()
                     )
+                    if log_next_iter:
+                        logger.debug("Starting to wait for next item")
                     done, pending = await asyncio.wait(
                         {next_item_task, state_change_task},
                         return_when=asyncio.FIRST_COMPLETED,
                     )
-                    # logger.debug(f"Switchable iterator - Done: {done} Pending: {pending}")
+                    if log_next_iter:
+                        log_next_iter = False
+                        logger.debug(
+                            f"Switchable iterator - Done: {done} Pending: {pending}"
+                        )
                     for task in pending:
                         task.cancel()
                         try:
@@ -175,11 +188,17 @@ class SwitchableIterator:
                             # If we aren't propagating the end, disconnect the iterator.
                             self.disconnect()
                     else:
-                        # logger.debug(f"Iterators switched during __anext__()")
+                        logger.debug(
+                            f"Iterators switched during __anext__().  Setting {self.state_change_completed_event}"
+                        )
+                        log_next_iter = True
                         pass
             finally:
                 self.state_change_event.clear()
+                do_log = not self.state_change_completed_event.is_set()
                 self.state_change_completed_event.set()
+                if do_log:
+                    logger.debug(f"Setting {self.state_change_completed_event} done")
 
     def end_iteration(self):
         self.state = SwitchableIterator.COMPLETED
@@ -210,4 +229,7 @@ class SwitchableIterator:
         self.state_change_event.set()
 
     async def wait_for_state_change(self):
+        logger.debug(
+            f"Waiting for state change completion {self.state_change_completed_event}"
+        )
         await self.state_change_completed_event.wait()

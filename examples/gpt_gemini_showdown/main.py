@@ -91,6 +91,12 @@ async def index():
     return await render_template("index.html")
 
 
+@app.route("/event_loop")
+async def event_loop():
+    output = "\n".join([str(task) for task in asyncio.all_tasks()])
+    return output
+
+
 # Incoming and outgoing message queues for each session
 @dataclasses.dataclass
 class CallQueues:
@@ -179,6 +185,7 @@ async def audio(id):
         language_codes=["en-US", "es-US"],
         audio_format=None,
         include_events=True,
+        max_minutes=30,
     )
     stream, text_input = fork_step(stream)
     text_input = map_step(text_input, lambda x: {"query": x})

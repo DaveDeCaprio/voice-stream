@@ -1,6 +1,7 @@
 import logging
 import os
 
+import asyncio
 import pytest
 from google.api_core.client_options import ClientOptions
 from google.cloud.speech_v1 import SpeechAsyncClient as SpeechAsyncClientV1
@@ -17,6 +18,7 @@ from voice_stream import (
     map_step,
     concat_step,
     async_init_step,
+    audio_rate_limit_step,
 )
 from voice_stream.audio import (
     wav_mulaw_file_source,
@@ -25,6 +27,7 @@ from voice_stream.audio import (
     ogg_page_separator_step,
     ogg_concatenator_step,
 )
+from voice_stream.core import delay_step, filter_step
 from voice_stream.events import SpeechStart, SpeechEnd, SpeechPartialResult
 from voice_stream.integrations.google import (
     google_speech_step,
@@ -223,6 +226,8 @@ async def test_google_text_to_speech_mp3(tmp_path):
 
 @pytest.mark.asyncio
 async def test_google_speech_exception():
+    """This annoyingly long and complicated test checks that we can really recover from errors in google speech steps.
+    Attempts to replicate all failure modes with a simpler test failed."""
     logger.debug("Start")
     speech_async_client = SpeechAsyncClient(
         client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
@@ -230,7 +235,8 @@ async def test_google_speech_exception():
     project = os.environ["GCP_PROJECT_ID"]
     location = os.environ["GCP_SPEECH_LOCATION"]
     recognizer = os.environ["GCP_TELEPHONE_SPEECH_RECOGNIZER"]
-    stream = binary_file_source(example_file("testing.webm"), chunk_size=500)
+    stream = binary_file_source(example_file("testing.webm"), chunk_size=1000)
+    stream = delay_step(stream, 0.05)
 
     def map_audio(x):
         return StreamingRecognizeRequest(recognizer=recognizer, audio=x)
@@ -244,26 +250,14 @@ async def test_google_speech_exception():
         recognizer,
     )
 
-    async def wrapper(stream):
-        try:
-            async for item in stream:
-                logger.debug(f"Wrapped")
-                yield item
-        except Exception as e:
-            logger.exception(f"Error!!!! {e}")
-            raise e
-        finally:
-            logger.info(f"Wrapped ended")
-
     async def recognize_step(stream):
-        logger.info("Initializing new recognize step")
-        config = array_source([initial_config])
-        stream = concat_step(config, stream)
-        return await speech_async_client.streaming_recognize(
-            wrapper(stream), timeout=0.1
-        )
+        return await speech_async_client.streaming_recognize(stream, timeout=0.8)
 
     def recognize_substream(stream):
+        logger.info("Initializing new recognize step")
+        config = array_source([initial_config])
+        config = log_step(config, "Config", lambda x: "")
+        stream = concat_step(config, stream)
         return async_init_step(stream, recognize_step)
 
     def handle_exception(e):
@@ -273,6 +267,36 @@ async def test_google_speech_exception():
     stream = exception_handling_substream(
         stream, recognize_substream, [handle_exception], max_exceptions=10
     )
-    # stream = async_init_step(stream, speech_async_client.streaming_recognize)
     out = await array_sink(stream)
     assert out == []
+
+
+@pytest.mark.asyncio
+async def test_google_speech_long():
+    speech_async_client = SpeechAsyncClient(
+        client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
+    )
+    project = os.environ["GCP_PROJECT_ID"]
+    location = os.environ["GCP_SPEECH_LOCATION"]
+    recognizer = os.environ["GCP_BROWSER_SPEECH_RECOGNIZER"]
+    logger.info(f"Recognizer is {recognizer}")
+    stream = binary_file_source(example_file("12min.mp3"), chunk_size=1024)
+    # stream = audio_rate_limit_step(stream, audio_format=AudioFormat.MP3, buffer_seconds=0.5)
+    # 1 Mb for 60 seconds of audio
+    stream = delay_step(stream, 60 / 1000)
+    stream, events = google_speech_step(
+        stream,
+        speech_async_client,
+        project=project,
+        location=location,
+        recognizer=recognizer,
+        include_events=True,
+        max_minutes=20,
+    )
+    stream = log_step(stream, "output")
+    out = array_sink(stream)
+    events = filter_step(events, lambda x: x.event_name == "speech_start")
+    events = log_step(events, "Speech event")
+    events = array_sink(events)
+    out, events = await asyncio.gather(out, events)
+    assert out == ["start browser bass call"]

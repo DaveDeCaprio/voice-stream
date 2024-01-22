@@ -43,6 +43,7 @@ from voice_stream.core import (
     partition_step,
     async_init_step,
     empty_source,
+    log_step,
 )
 from voice_stream.events import SpeechStart, SpeechEnd, BaseEvent, SpeechPartialResult
 from voice_stream.integrations.google_utils import (
@@ -297,9 +298,19 @@ def _google_speech_stream(
     stream = chunk_bytes_step(stream, MAX_STREAM_SIZE)
     stream = map_step(stream, map_audio)
 
+    count = 0
+
     def recognize_substream(stream):
+        nonlocal count
+        count += 1
+        logger.error(f"Creating new recognize substream #{count}")
+
         config = array_source([initial_config])
+        config = log_step(config, f"Recognize started #{count}", lambda x: "")
         stream = concat_step(config, stream)
+        stream = log_step(
+            stream, f"Audio to SR #{count}", lambda x: "", every_nth_message=250
+        )
         return async_init_step(stream, speech_async_client.streaming_recognize)
 
     def handle_exception(e):

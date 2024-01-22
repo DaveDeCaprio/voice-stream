@@ -44,11 +44,23 @@ async def test_partition():
 
 
 @pytest.mark.asyncio
-async def test_log_source():
+async def test_log_step():
     stream = array_source(range(4))
     stream = log_step(stream, "test")
     out = await array_sink(stream)
     assert out == [0, 1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_log_step_every_n(caplog):
+    stream = array_source(range(4))
+    stream = log_step(stream, "test", every_nth_message=2)
+    out = await array_sink(stream)
+    assert out == [0, 1, 2, 3]
+    assert caplog.record_tuples == [
+        ("voice_stream.core", 20, "test: 0"),
+        ("voice_stream.core", 20, "test: 2"),
+    ]
 
 
 @pytest.mark.asyncio

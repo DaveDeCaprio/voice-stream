@@ -13,7 +13,6 @@ from voice_stream import (
     substream_step,
     cancelable_substream_step,
     interruptable_substream_step,
-    concat_step,
 )
 from voice_stream._substream_iters import ResettableIterator, SwitchableIterator
 from voice_stream.substreams import exception_handling_substream
@@ -241,6 +240,7 @@ async def test_exception_handling_substream():
             yield item
 
     stream = gen()
+    stream = log_step(stream, "test")
     stream = exception_handling_substream(
         stream, sub_with_ex, [lambda x: [f"Error {x.args[0]}"]]
     )

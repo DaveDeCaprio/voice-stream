@@ -10,7 +10,7 @@ from typing import (
     Any,
 )
 
-from voice_stream._substream_iters import SwitchableIterator
+from voice_stream._substream_iters import SwitchableIterator, ResettableIterator
 from voice_stream.core import (
     single_source,
     queue_source,
@@ -324,18 +324,29 @@ def exception_handling_substream(
     exception_count = 0
     end_of_iter = False
 
+    lock = asyncio.Lock()
+
     async def mark_end_of_iter(aiter):
         try:
-            async for item in aiter:
-                yield item
+            logger.debug(f"Waiting for lock")
+            async with lock:
+                logger.debug(f"Got lock")
+                async for item in aiter:
+                    yield item
+            logger.debug(f"Released lock cleanly")
+        except BaseException as e:
+            logger.debug(f"Released lock through exception")
+            raise e
         finally:
+            logger.debug(f"Released lock/Iteration ended")
             nonlocal end_of_iter
             end_of_iter = True
 
-    async_iterator = mark_end_of_iter(async_iterator)
+    async_iterator = ResettableIterator(mark_end_of_iter(async_iterator))
 
     def new_substreams():
         if end_of_iter:
+            logger.debug("End of iteration was reached.  New substreams are empty")
             return [empty_source() for _ in range(len(output_iters))]
         else:
             substreams = to_tuple(substream_func(async_iterator))
@@ -347,6 +358,7 @@ def exception_handling_substream(
             ]
 
     async def exception_received(e, ix):
+        logger.exception(f"Exception in stream #{ix} received {e}")
         nonlocal exception_count
         exception_count += 1
         if max_exceptions and exception_count > max_exceptions:
@@ -355,19 +367,31 @@ def exception_handling_substream(
             )
             raise e
         # When an exception is received, recreate the stream and reset the outputs.
+        async_iterator.reset()
+        logger.debug("Reset made")
+        await async_iterator.confirm_reset()
+        logger.debug("Reset confirmed")
         nonlocal substreams
-        substreams = new_substreams()
         exeception_result = exception_handlers[ix](e)
         assert len(exeception_result) == len(
             substreams
         ), "The exception handler must return a list of outputs, one for each output stream."
         substreams = [
             concat_step(to_source(result), stream)
-            for result, stream in zip(exeception_result, substreams)
+            for result, stream in zip(exeception_result, new_substreams())
         ]
+        logger.debug("Switching outputs after cancel")
         _switch_outputs(output_iters, substreams)
+        logger.debug(f"{len(output_iters)} Outputs switched")
         for i in output_iters:
-            await i.wait_for_state_change()
+            try:
+                await i.wait_for_state_change()
+            except BaseException as e:
+                logger.exception(f"Error waiting for state change {e}")
+                raise e
+            finally:
+                logger.debug("Done waiting for state change, but maybe an exception?")
+        logger.debug("Switch completed")
         return None
 
     substreams = new_substreams()
