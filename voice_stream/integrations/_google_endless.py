@@ -137,9 +137,9 @@ class EndlessStream:
                     stream = queue_source(input_queue, cancel_event)
                     # stream = log_step(stream, "Audio", lambda x: f"{format_current_task()}")
                     # stream, audio_out = fork_step(stream)
-                    # background_task(text_file_sink(audio_out, f"{self.restart_counter}.ndjson"))
                     # audio_out = map_step(audio_out, lambda x:x.audio_content if hasattr(x, "audio_content") else x.audio)
                     # background_task(binary_file_sink(audio_out, f"{self.restart_counter}.webm"))
+                    # background_task(text_file_sink(audio_out, f"{self.restart_counter}.ndjson"))
                     config = single_source(self.initial_config)
                     config = log_step(
                         config,
@@ -211,13 +211,13 @@ class EndlessStream:
                         / seconds_per_chunk
                     )
 
-                    self.duration_of_previous_streams += round(
+                    self.duration_of_previous_streams += (
                         n_chunks_fully_processed * seconds_per_chunk
                     )
-                    duration_of_replay_buffer = round(
-                        (len(replay_buffer) - n_chunks_fully_processed)
-                        * seconds_per_chunk
-                    )
+
+                    duration_of_replay_buffer = (
+                        len(replay_buffer) - n_chunks_fully_processed
+                    ) * seconds_per_chunk
                     logger.debug(
                         f"Restarting stream with {duration_of_replay_buffer} seconds of replay.  Previous streams were {self.duration_of_previous_streams} seconds."
                     )
@@ -228,7 +228,7 @@ class EndlessStream:
                     replay_buffer = []
                     count += 1
                     for c in _chunk_bytes(replay_audio, EndlessStream.MAX_STREAM_SIZE):
-                        replay_buffer.append(item)
+                        replay_buffer.append(c)
                         ret = self.map_audio(c)
                         yield ret
 

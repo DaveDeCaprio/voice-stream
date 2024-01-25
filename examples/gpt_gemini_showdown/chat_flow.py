@@ -53,10 +53,9 @@ def run_chat_flow(
         recognizer=recognizer,
         model="latest_long",
         language_codes=["en-US", "es-US"],
-        audio_format=None,
+        audio_format=AudioFormat.WEBM_OPUS,
         include_events=True,
         max_minutes=30,
-        stream_reset_timeout_secs=15,
     )
     stream, text_input = fork_step(stream)
     text_input = map_step(text_input, lambda x: {"query": x})

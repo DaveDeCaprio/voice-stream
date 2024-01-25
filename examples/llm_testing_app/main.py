@@ -358,7 +358,8 @@ async def browser_transcribe():
     browser_call_id = await _setup_browser_call()
     logger.info(f"Playback and record browser audio.  uuid: {browser_call_id}")
     stream = quart_websocket_source()
-    # stream, audio_save = fork_step(stream)
+    stream, audio_save = fork_step(stream)
+    audio_out = binary_file_sink(audio_save, f"all.webm")
     # os.makedirs("target/browser", exist_ok=True)
     # now = time.perf_counter()
     # def audio_json(packet):
@@ -376,11 +377,12 @@ async def browser_transcribe():
         model="latest_long",
         language_codes=["en-US", "es-US"],
         audio_format=AudioFormat.WEBM_OPUS,
+        stream_reset_timeout_secs=10,
     )
     stream = log_step(stream, "Speech")
     stream = map_step(stream, lambda x: TextInput(text=x))
     done = queue_sink(stream, current_app.current_calls[browser_call_id].outbound)
-    await run_call(browser_call_id, done)
+    await run_call(browser_call_id, done, audio_out)
     logger.info("Transcription started")
 
 
