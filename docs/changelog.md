@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.9.0 (Jan 25, 2024)
+
+* Rewrote `google_speech_step` to allow streaming for longer than 5 minutes.
+* Added `background_task` which logs exceptions in all background tasks for better observability.
+* Added `abort_step`
+* Added optional `cancel_event` to `queue_source`
+* Add `every_nth_message` parameter to log step
+* Fixed some bugs in `async_init_step` where exceptions would cause hangs.
+* google_speech_step now requires an audioFormat.  Required to split audio when exceeding 5 minutes of streaming.
+* Added `recover_exception_substream`
+
 ## 0.8.0 (Jan 17, 2024)
 
 * Added LangChain memory steps
