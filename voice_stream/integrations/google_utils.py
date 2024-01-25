@@ -101,9 +101,7 @@ async def create_recognizer(
 def _resolve_audio_decoding(audio_format):
     if isinstance(audio_format, ExplicitDecodingConfig):
         return None, audio_format
-    elif audio_format is None or audio_format != AudioFormat.WAV_MULAW_8KHZ:
-        return AutoDetectDecodingConfig(), None
-    else:
+    elif audio_format == AudioFormat.WAV_MULAW_8KHZ:
         # noinspection PyTypeChecker
         explicit = ExplicitDecodingConfig(
             encoding=ExplicitDecodingConfig.AudioEncoding.MULAW,
@@ -111,3 +109,5 @@ def _resolve_audio_decoding(audio_format):
             audio_channel_count=1,
         )
         return None, explicit
+    else:
+        return AutoDetectDecodingConfig(), None

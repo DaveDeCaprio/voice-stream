@@ -6,6 +6,7 @@ import logging
 from typing import AsyncIterator, Union, Tuple
 
 import asyncstdlib
+from google.api_core.exceptions import Cancelled
 from google.cloud.speech_v1 import (
     SpeechAsyncClient as SpeechAsyncClientV1,
     StreamingRecognizeRequest as StreamingRecognizeRequestV1,
@@ -35,22 +36,21 @@ from pydantic import BaseModel
 from voice_stream.audio import AudioFormat, remove_wav_header
 from voice_stream.core import (
     map_step,
-    filter_step,
-    array_source,
-    concat_step,
-    byte_buffer_step,
-    chunk_bytes_step,
     partition_step,
     async_init_step,
-    empty_source,
-    log_step,
 )
-from voice_stream.events import SpeechStart, SpeechEnd, BaseEvent, SpeechPartialResult
+from voice_stream.events import (
+    SpeechStart,
+    SpeechEnd,
+    BaseEvent,
+    SpeechPartialResult,
+    SpeechToTextResult,
+)
+from voice_stream.integrations._google_endless import EndlessStream
 from voice_stream.integrations.google_utils import (
     _resolve_audio_decoding,
     GoogleDecodingConfig,
 )
-from voice_stream.substreams import exception_handling_substream
 from voice_stream.text_to_speech import AudioWithText
 
 # Can be one of the standard audio formats or a Google AudioConfig object
@@ -139,9 +139,10 @@ def google_speech_step(
     recognizer,
     model: str = "latest_long",
     language_codes: Union[str, list[str]] = ["en-US", "es-US"],
-    audio_format: GoogleDecodingConfig = None,
+    audio_format: Union[GoogleDecodingConfig, AudioFormat] = None,
     include_events: bool = False,
     max_minutes: int = 9,
+    stream_reset_timeout_secs=240,
 ) -> Union[AsyncIterator[str], Tuple[AsyncIterator[str], AsyncIterator[BaseEvent]]]:
     """
     Data flow step for converting audio into text using Google Cloud Speech-to-Text V2 API.
@@ -170,12 +171,15 @@ def google_speech_step(
     language_codes : Union[str, list[str]], optional
         The language code(s) for the recognizer. Can be a single string or a list of strings.
         Default is ["en-US", "es-US"].
-    audio_format : GoogleDecodingConfig, optional
+    audio_format : GoogleDecodingConfig | AudioFormat, optional
         Optional configuration for audio decoding. Not required if the recognizer auto-detects the format.
     include_events : bool, optional
         If True, the function also returns a stream of speech recognition events. Default is False.
     max_minutes : int, optional
         The maximum number of minutes to process.  Default is 9.
+    stream_reset_timeout_secs : int, optional
+        The time internal on which to refresh the call to the recognizer.  Google only supports streams up to 5 minutes,
+        so the default is 4 minutes.
 
     Returns
     -------
@@ -189,6 +193,8 @@ def google_speech_step(
     - The function breaks the audio stream into chunks, sends them to the Speech-to-Text
       API, and processes the responses to extract the transcript.
     - Speech recognition events include information like word timings and confidences.
+    - If you intend to run a recognition stream that is longer than `stream_reset_timeout_secs`, you need to set the
+      audio format.
     """
     initial_config = _initial_recognition_config(
         include_events,
@@ -203,15 +209,16 @@ def google_speech_step(
     def map_audio(x):
         return StreamingRecognizeRequest(recognizer=recognizer, audio=x)
 
-    return _google_speech_stream(
-        async_iter,
-        include_events,
-        map_audio,
-        initial_config,
+    stream = EndlessStream(
         speech_async_client,
-        _map_speech_events,
-        max_minutes=max_minutes,
-    )
+        initial_config,
+        audio_format=audio_format,
+        map_audio=map_audio,
+        map_event=_map_speech_event,
+        stream_reset_timeout_secs=stream_reset_timeout_secs,
+        max_resets=(60 * max_minutes) // stream_reset_timeout_secs,
+    ).step(async_iter)
+    return _google_speech_postprocessing(stream, include_events)
 
 
 def google_speech_v1_step(
@@ -222,6 +229,7 @@ def google_speech_v1_step(
     language_code: str = "en-US",
     include_events: bool = False,
     max_minutes: int = 9,
+    stream_reset_timeout_secs=240,
 ) -> AsyncIterator[str]:
     """
     Data flow step for converting audio into text using Google Cloud Speech-to-Text V1 API.
@@ -272,74 +280,39 @@ def google_speech_v1_step(
     def map_audio(x):
         return StreamingRecognizeRequestV1(audio_content=x)
 
-    return _google_speech_stream(
-        async_iter,
-        include_events,
-        map_audio,
-        initial_config,
+    stream = EndlessStream(
         speech_async_client,
-        _map_speech_events_v1,
-        max_minutes=max_minutes,
+        initial_config,
+        audio_format=audio_format,
+        map_audio=map_audio,
+        map_event=_map_speech_event_v1,
+        stream_reset_timeout_secs=stream_reset_timeout_secs,
+        max_resets=(60 * max_minutes) // stream_reset_timeout_secs,
+    ).step(async_iter)
+    return _google_speech_postprocessing(
+        stream,
+        include_events,
     )
 
 
-def _google_speech_stream(
-    async_iter: AsyncIterator[bytes],
+def _google_speech_postprocessing(
+    async_iter: AsyncIterator[BaseEvent],
     include_events: bool,
-    map_audio,
-    initial_config,
-    speech_async_client,
-    map_events,
-    max_minutes: int,
 ):
-    MAX_STREAM_SIZE = 25600
     stream = async_iter
-    stream = byte_buffer_step(stream)
-    stream = chunk_bytes_step(stream, MAX_STREAM_SIZE)
-    stream = map_step(stream, map_audio)
+    # stream = log_step(stream, "SR EH out", lambda x: f"{format_current_task()}\n{x}")
 
-    count = 0
+    def extract_text(x):
+        return x.text if isinstance(x, SpeechToTextResult) and len(x.text) > 0 else None
 
-    def recognize_substream(stream):
-        nonlocal count
-        count += 1
-        logger.error(f"Creating new recognize substream #{count}")
-
-        config = array_source([initial_config])
-        config = log_step(config, f"Recognize started #{count}", lambda x: "")
-        stream = concat_step(config, stream)
-        stream = log_step(
-            stream, f"Audio to SR #{count}", lambda x: "", every_nth_message=250
+    if include_events:
+        stream, events = partition_step(
+            stream, lambda x: isinstance(x, SpeechToTextResult)
         )
-        return async_init_step(stream, speech_async_client.streaming_recognize)
-
-    def handle_exception(e):
-        logger.error(f"Google Recognize aborted. {e}", exc_info=e)
-        return [None]
-
-    stream = exception_handling_substream(
-        stream, recognize_substream, [handle_exception], max_exceptions=max_minutes // 5
-    )
-
-    def split_events(x):
-        try:
-            return "results" in x and x.results[0].is_final
-        except Exception as e:
-            logger.error(f"Error splitting event\n{x}\n{e}", exc_info=e)
-            return False
-
-    if include_events:
-        stream, events = partition_step(stream, split_events)
-    # stream = filter_step(stream, lambda x: x.results[0].is_final)
-    stream = map_step(stream, _get_transcript)
-    stream = filter_step(stream, lambda x: len(x) > 0)
-    if include_events:
-        # events = log_step(events, "google_speech")
-        events = map_step(events, map_events)
-        events = filter_step(events, lambda x: x is not None)
-        # stream = log_step(stream, "Google out")
+        stream = map_step(stream, extract_text, ignore_none=True)
         return stream, events
     else:
+        stream = map_step(stream, extract_text, ignore_none=True)
         return stream
 
 
@@ -404,7 +377,7 @@ def _initial_recognition_config(
             ),
             streaming_features=StreamingRecognitionFeatures(
                 interim_results=include_events,
-                enable_voice_activity_events=include_events,
+                enable_voice_activity_events=True,
                 # voice_activity_timeout=StreamingRecognitionFeatures.VoiceActivityTimeout(
                 #     # speech_end_timeout
                 # ),
@@ -449,46 +422,64 @@ def _initial_recognition_config_v1(
                 use_enhanced=use_enhanced,
             ),
             interim_results=include_events,
-            enable_voice_activity_events=include_events,
+            enable_voice_activity_events=True,
         ),
     )
     # logger.debug(f"Initial recognition config: {out}")
     return out
 
 
-def _map_speech_events(input):
+def _map_speech_event(input, time_offset: float = 0):
     if (
         input.speech_event_type
         == StreamingRecognizeResponse.SpeechEventType.SPEECH_ACTIVITY_BEGIN
     ):
-        return SpeechStart(time_since_start=input.speech_event_offset.total_seconds())
+        return SpeechStart(
+            time_since_start=time_offset + input.speech_event_offset.total_seconds()
+        )
     if (
         input.speech_event_type
         == StreamingRecognizeResponse.SpeechEventType.SPEECH_ACTIVITY_END
     ):
-        return SpeechEnd(time_since_start=input.speech_event_offset.total_seconds())
-    if input.results:
-        return SpeechPartialResult(
-            text=_get_transcript(input),
-            time_since_start=input.results[-1].result_end_offset.total_seconds(),
+        return SpeechEnd(
+            time_since_start=time_offset + input.speech_event_offset.total_seconds()
         )
+    if input.results:
+        transcript = _get_transcript(input)
+        time_since = time_offset + input.results[-1].result_end_offset.total_seconds()
+        if input.results[0].is_final:
+            return SpeechToTextResult(text=transcript, time_since_start=time_since)
+        else:
+            return SpeechPartialResult(text=transcript, time_since_start=time_since)
+    logger.warning(f"Unmapped speech event {input}")
     return None
 
 
-def _map_speech_events_v1(input):
+def _map_speech_event_v1(input, time_offset: float = 0):
     if (
         input.speech_event_type
         == StreamingRecognizeResponseV1.SpeechEventType.SPEECH_ACTIVITY_BEGIN
     ):
-        return SpeechStart(time_since_start=input.speech_event_time.total_seconds())
+        return SpeechStart(
+            time_since_start=time_offset + input.speech_event_time.total_seconds()
+        )
     if (
         input.speech_event_type
         == StreamingRecognizeResponseV1.SpeechEventType.SPEECH_ACTIVITY_END
     ):
-        return SpeechEnd(time_since_start=input.speech_event_time.total_seconds())
-    if input.results:
-        return SpeechPartialResult(
-            text=_get_transcript(input),
-            time_since_start=input.results[-1].result_end_time.total_seconds(),
+        return SpeechEnd(
+            time_since_start=time_offset + input.speech_event_time.total_seconds()
         )
+    if input.results:
+        transcript = _get_transcript(input)
+        time_since = time_offset + input.results[-1].result_end_time.total_seconds()
+        if input.results[0].is_final:
+            return SpeechToTextResult(text=transcript, time_since_start=time_since)
+        else:
+            return SpeechPartialResult(text=transcript, time_since_start=time_since)
+    if input.error:
+        raise ValueError(
+            f"Google Speech Recognition Error - Code: {input.error.code} Message: {input.error.message}"
+        )
+    logger.warning(f"Unmapped speech event {input}")
     return None

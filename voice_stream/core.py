@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import json
 import logging
+import time
 from asyncio import QueueEmpty, CancelledError
 from typing import (
     AsyncIterator,
@@ -29,6 +30,10 @@ from voice_stream.types import (
     EndOfStreamMarker,
     is_async_iterator,
     to_source,
+    format_current_task,
+    format_stack_trace,
+    background_task,
+    cancel_with_confirmation,
 )
 
 logger = logging.getLogger(__name__)
@@ -279,6 +284,7 @@ class QueueAsyncIterator:
 
 def queue_source(
     queue: AwaitableOrObj[asyncio.Queue[T]] = None,
+    cancel_event: asyncio.Event = None,
 ) -> Union[AsyncIterator[T], QueueAsyncIterator]:
     """
     Data flow source that yields items from an asyncio.Queue.
@@ -293,6 +299,10 @@ def queue_source(
         or an Awaitable that returns the queue, which can be useful if the queue isn't yet created.  This parameter is
         optional.  If not provided, the AsyncIterator will be a :func:`~voice_stream.QueueAsyncIterator` which allows
         items to be added to the queue via the `put` method.
+    cancel_event : asyncio.Event
+        An optional cancellation event that externally indicates that this sink should stop listening on the queue.
+        This is useful if the queue will be reused for another operation.  Otherwise this event will sit around waiting
+        for a new message.
 
     Returns
     -------
@@ -313,22 +323,58 @@ def queue_source(
     -----
     - The function expects that the queue will be closed by putting `EndOfStreamMarker` into it.
     - If an Awaitable[Queue] is passed, this function will return immediately and the queue will be awaited when the iterator is started.
+    - cancel_event is only allowed if a queue is passed in.  (It doesn't make sense otherwise.  If the queue is internally managed, it can't be reused).
     """
     if queue:
+        if cancel_event:
 
-        async def gen():
-            resolved_queue = await resolve_awaitable_or_obj(queue)
-            while True:
-                try:
-                    item = await resolved_queue.get()
-                    if item == EndOfStreamMarker:
-                        break
-                except asyncio.CancelledError:
-                    # logger.debug("Queue iterator cancelled.")
-                    break
-                yield item
+            class WaitingIter:
+                def __init__(self, queue, event):
+                    self.queue = queue
+                    self.event = event
 
-        return gen()
+                def __aiter__(self):
+                    return self
+
+                async def __anext__(self):
+                    if self.event.is_set():
+                        raise StopAsyncIteration
+                    resolved_queue = await resolve_awaitable_or_obj(self.queue)
+                    item_task = asyncio.create_task(resolved_queue.get())
+                    stop_task = asyncio.create_task(self.event.wait())
+                    done, pending = await asyncio.wait(
+                        {item_task, stop_task}, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    for task in pending:
+                        await cancel_with_confirmation(task)
+                    if item_task in done:
+                        item = await item_task
+                        if item == EndOfStreamMarker:
+                            raise StopAsyncIteration
+                        return item
+                    else:
+                        assert stop_task in done
+                        raise StopAsyncIteration
+
+            return WaitingIter(queue, cancel_event)
+
+        else:
+
+            async def gen():
+                resolved_queue = await resolve_awaitable_or_obj(queue)
+                while True:
+                    try:
+                        item = await resolved_queue.get()
+                        if item == EndOfStreamMarker:
+                            break
+                    except asyncio.CancelledError:
+                        # logger.debug("Queue iterator cancelled.")
+                        raise
+                    # logger.debug(f"Got {str(item)[:50]} from queue")
+                    yield item
+                # logger.debug("Queue exhausted.")
+
+            return gen()
     else:
         return QueueAsyncIterator()
 
@@ -336,7 +382,9 @@ def queue_source(
 async def queue_sink(
     async_iter: AsyncIterator[T],
     queue: Optional[AwaitableOrObj[asyncio.Queue]] = None,
-    end_of_stream=EndOfStreamMarker,
+    end_of_stream: Any = EndOfStreamMarker,
+    send_end_of_stream: bool = True,
+    propagate_exceptions: bool = True,
 ) -> asyncio.Queue:
     """
     Data flow sink that writes items to a queue.
@@ -353,6 +401,10 @@ async def queue_sink(
         An optional asyncio.Queue or an awaitable resulting in an asyncio.Queue.
         If not provided, a new :class:`~voice_stream:QueueWithException` is created.
     end_of_stream : The item to enqueue to indicate the stream has ended.  Defaults to EndOfStreamMarker
+    send_end_of_stream : bool, optional
+        If False, don't send any end of stream signal at all.
+    propagate_exceptions : bool, optional
+        If True, send exceptions to the queue.  Otherwise, raise them.  Defaults to True.
 
     Returns
     -------
@@ -381,14 +433,20 @@ async def queue_sink(
                     if queue:
                         resolved_queue = await resolve_awaitable_or_obj(queue)
                     else:
-                        resolved_queue = asyncio.Queue()
+                        resolved_queue = QueueWithException()
+                # logger.debug(f"Put {str(message)[:50]} on queue")
                 await resolved_queue.put(message)
     except Exception as e:
-        if resolved_queue and hasattr(resolved_queue, "set_exception"):
+        if (
+            propagate_exceptions
+            and resolved_queue
+            and hasattr(resolved_queue, "set_exception")
+        ):
             await resolved_queue.set_exception(e)
         else:
             raise e
-    if resolved_queue:
+    if resolved_queue and send_end_of_stream:
+        # logger.debug(f"Adding end of stream marker to queue {format_stack_trace(asyncio.current_task())}")
         await resolved_queue.put(end_of_stream)  # signal completion
     return resolved_queue
 
@@ -762,6 +820,7 @@ def async_init_step(
 
         def __init__(self):
             self.iter = async_iter.__aiter__()
+            # Using create_task here because any exception in the result will get through in __anext__
             self.first_item_task = asyncio.create_task(self.iter.__anext__())
 
         def __aiter__(self):
@@ -771,6 +830,7 @@ def async_init_step(
             if self.first_item_task:
                 out = self.first_item_task
                 self.first_item_task = None
+                # logger.debug(f"Waiting for first item to async init step {format_current_task()}")
                 return await out
             else:
                 return await self.iter.__anext__()
@@ -791,6 +851,7 @@ def async_init_step(
                 await self.init_event.wait()
                 if self.init_exception:
                     raise self.init_exception
+                # logger.debug(f"Async init completed.  Waiting for next step in {format_current_task()}.")
             return await self.iter.__anext__()
 
     init_event = asyncio.Event()
@@ -799,21 +860,52 @@ def async_init_step(
     async def do_init():
         try:
             input = AsyncInitInputIterator()
+            # logger.debug(f"Beginning async init in {format_current_task()}.")
             step = await f(input)
+            # logger.debug(f"Completed async init in {format_current_task()}.")
             for output, iterable in zip(outputs, to_tuple(step)):
                 output.iter = iterable.__aiter__()
         except Exception as e:
+            # logger.exception("Exception in async init.")
             for output in outputs:
                 output.init_exception = e
         finally:
             init_event.set()
 
-    asyncio.create_task(do_init())
+    background_task(do_init())
 
     if len(outputs) == 1:
         return outputs[0]
     else:
         return outputs
+
+
+async def abort_step(
+    async_iter: AsyncIterator[T], event: asyncio.Event
+) -> AsyncIterator[T]:
+    """
+    Data flow step that ends when an event is set.
+
+    This step passes along items from the input iterator until an event is set, and then it ends.  Useful for cleanup tasks.
+
+    Parameters
+    ----------
+    async_iter : AsyncIterator[T]
+        An input asynchronous iterator.
+    event : asyncio.Event
+        The event that signals that iteration should end.
+
+    Returns
+    -------
+    AsyncIterator[T]
+        An iterator returning the input values.
+
+    """
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            if event.is_set():
+                return
+            yield item
 
 
 def extract_value_step(
@@ -914,13 +1006,11 @@ async def recover_exception_step(
             async for item in owned_aiter:
                 yield item
     except exception_type as e:
-        logger.debug("Recover exception step moving into handler")
         eh = await resolve_awaitable_or_obj(exception_handler(e))
         handler_iter = to_source(eh)
         async with asyncstdlib.scoped_iter(handler_iter) as owned_aiter:
             async for item in owned_aiter:
                 yield item
-        logger.debug("Recover exception step completed handler")
 
 
 async def log_step(
@@ -967,7 +1057,7 @@ async def log_step(
     log = True
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
-            if every_nth_message:
+            if every_nth_message and every_nth_message > 1:
                 count += 1
                 log = count % every_nth_message == 1
             if log:
@@ -1092,6 +1182,19 @@ async def map_step(
                 yield v
 
 
+async def timeout_step(
+    async_iter: AsyncIterator[bytes], timeout: float
+) -> AsyncIterator[bytes]:
+    start = time.perf_counter()
+    async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
+        async for item in owned_aiter:
+            now = time.perf_counter()
+            if (now - start) > timeout:
+                logger.debug("Raising TimeoutError from timeout_step")
+                raise TimeoutError()
+            yield item
+
+
 async def chunk_bytes_step(
     async_iter: AsyncIterator[bytes], chunk_size: AwaitableOrObj[int]
 ) -> AsyncIterator[bytes]:
@@ -1125,10 +1228,15 @@ async def chunk_bytes_step(
     async with asyncstdlib.scoped_iter(async_iter) as owned_aiter:
         async for item in owned_aiter:
             resolved_chunk_size = await resolve_awaitable_or_obj(chunk_size)
-            for i in range(0, len(item), resolved_chunk_size):
-                data = item[i : i + resolved_chunk_size]
-                # logger.debug(f"Chunked {len(data)} bytes")
-                yield data
+            for c in _chunk_bytes(item, resolved_chunk_size):
+                yield c
+
+
+def _chunk_bytes(item, chunk_size):
+    for i in range(0, len(item), chunk_size):
+        data = item[i : i + chunk_size]
+        # logger.debug(f"Chunked {len(data)} bytes")
+        yield data
 
 
 async def min_size_bytes_step(
@@ -1247,7 +1355,7 @@ async def merge_step(*async_iters: list[AsyncIterator[T]]) -> AsyncIterator[T]:
     """
     # TODO Implement with backpressure.
     queue = QueueWithException()
-    tasks = [asyncio.create_task(queue.enqueue_iterator(it)) for it in async_iters]
+    tasks = [background_task(queue.enqueue_iterator(it)) for it in async_iters]
 
     try:
         completed = 0
@@ -1327,8 +1435,7 @@ async def merge_as_dict_step(
                 values[key] = item
 
     tasks = [
-        asyncio.create_task(consume_iter(k, iter))
-        for k, iter in secondary_iters.items()
+        background_task(consume_iter(k, iter)) for k, iter in secondary_iters.items()
     ]
     async for item in first_iter:
         # logger.debug(f"Merging dict for {item}")
@@ -1386,12 +1493,12 @@ def partition_step(
                     # logger.debug(f"Queue sizes: {true_queue.qsize()} {false_queue.qsize()}")
         except Exception as e:
             # logger.debug(f"Exception while queueing")
-            true_queue.set_exception(e)
-            false_queue.set_exception(e)
+            await true_queue.set_exception(e)
+            await false_queue.set_exception(e)
         await true_queue.put(EndOfStreamMarker)  # Signal end of iteration
         await false_queue.put(EndOfStreamMarker)
 
-    distribution_task = asyncio.create_task(distribute())
+    distribution_task = background_task(distribute())
     true_iterator = queue_source(true_queue)
     false_iterator = queue_source(false_queue)
 
@@ -1469,12 +1576,12 @@ def fork_step(
                         await left_queue.put(item)
                         await right_queue.put(item)
             except Exception as e:
-                left_queue.set_exception(e)
-                right_queue.set_exception(e)
+                await left_queue.set_exception(e)
+                await right_queue.set_exception(e)
             await left_queue.put(EndOfStreamMarker)  # Signal end of iteration
             await right_queue.put(EndOfStreamMarker)
 
-        asyncio.create_task(distribute())
+        background_task(distribute())
         left_iterator = queue_source(left_queue)
         right_iterator = queue_source(right_queue)
 
@@ -1485,7 +1592,7 @@ def fork_step(
 
 
 def buffer_step(
-    async_iter: AsyncIterator[T], join_func: Callable[[List[T]], T]
+    async_iter: AsyncIterator[T], join_func: Optional[Callable[[List[T]], T]] = None
 ) -> AsyncIterator[T]:
     """
     Data flow step that buffers and aggregates items them before yielding.
@@ -1498,8 +1605,10 @@ def buffer_step(
     ----------
     async_iter : AsyncIterator[T]
         The asynchronous iterator to buffer from.
-    join_func : Callable[[List[T]], T]
-        A function that takes a list of items and returns an aggregated result.
+    join_func : Callable[[List[T]], T], optional
+        A function that takes a list of items and returns an aggregated result.  This is useful for buffering strings or
+        byte arrays.  If not specified, then the items are returned exactly as they are put on the buffer.
+
 
     Returns
     -------
@@ -1519,7 +1628,7 @@ def buffer_step(
     >>> assert done == ['abcd']
     """
     queue = QueueWithException()
-    task = asyncio.create_task(queue.enqueue_iterator(async_iter))
+    task = background_task(queue.enqueue_iterator(async_iter))
 
     async def make_iterator() -> AsyncIterator[T]:
         try:
@@ -1528,30 +1637,29 @@ def buffer_step(
                 # Use a blocking get() to ensure there's at least one chunk of
                 # data, and stop iteration if the chunk is None, indicating the
                 # end of the audio stream.
-                try:
-                    item = await queue.get()
-                    if item == EndOfStreamMarker:
-                        # logger.debug(f"End of queue")
-                        return
-                    data = [item]
-                except asyncio.CancelledError:
-                    # logger.debug(f"ByteBuffer cancelled")
+                item = await queue.get()
+                if item == EndOfStreamMarker:
+                    # logger.debug(f"End of queue")
                     return
-                # Now consume whatever other data's still buffered.
-                while True:
-                    try:
-                        chunk = queue.get_nowait()
-                        if chunk == EndOfStreamMarker:
-                            # logger.debug(f"Got None in nowait")
-                            ongoing = False
+                if join_func:
+                    data = [item]
+                    # Now consume whatever other data's still buffered.
+                    while True:
+                        try:
+                            chunk = queue.get_nowait()
+                            if chunk == EndOfStreamMarker:
+                                # logger.debug(f"Got None in nowait")
+                                ongoing = False
+                                break
+                            data.append(chunk)
+                        except QueueEmpty:
+                            # logger.debug(f"Got QueueEmpty in nowait")
                             break
-                        data.append(chunk)
-                    except QueueEmpty:
-                        # logger.debug(f"Got QueueEmpty in nowait")
-                        break
-                out = join_func(data)
-                # logger.debug(f"Joining {data} {out}")
-                yield out
+                    out = join_func(data)
+                    # logger.debug(f"Joining {data} {out}")
+                    yield out
+                else:
+                    yield item
         finally:
             task.cancel()
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import dataclasses
 import datetime
 import logging
 import os
+import time
 import urllib
 import uuid
 from asyncio import CancelledError
@@ -13,6 +15,7 @@ from typing import Coroutine, AsyncIterator
 from dotenv import load_dotenv
 from google.api_core.client_options import ClientOptions
 from google.cloud.speech_v2 import SpeechAsyncClient
+from google.cloud.speech_v1 import SpeechAsyncClient as SpeechAsyncClientV1
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
 from pydantic import BaseModel
 from quart import (
@@ -49,6 +52,7 @@ from voice_stream.events import AnsweringMachineDetection, CallStarted
 from voice_stream.integrations.google import (
     google_speech_step,
     google_text_to_speech_step,
+    google_speech_v1_step,
 )
 from voice_stream.integrations.langchain import langchain_step
 from voice_stream.integrations.quart import quart_websocket_sink, quart_websocket_source
@@ -333,11 +337,10 @@ async def run_call(call_sid: AwaitableOrObj[str], *sinks: list[Coroutine]):
     try:
         logger.info("Call stream is set up, processing messages...")
         await result
-    except CancelledError:
-        pass
-    logger.info("All tasks finished.")
-    resolved_call_sid = await resolve_awaitable_or_obj(call_sid)
-    del current_app.current_calls[resolved_call_sid]
+    finally:
+        logger.info("All tasks finished.")
+        resolved_call_sid = await resolve_awaitable_or_obj(call_sid)
+        del current_app.current_calls[resolved_call_sid]
 
 
 @app.websocket("/ws/audio/record")
@@ -355,6 +358,14 @@ async def browser_transcribe():
     browser_call_id = await _setup_browser_call()
     logger.info(f"Playback and record browser audio.  uuid: {browser_call_id}")
     stream = quart_websocket_source()
+    # stream, audio_save = fork_step(stream)
+    # os.makedirs("target/browser", exist_ok=True)
+    # now = time.perf_counter()
+    # def audio_json(packet):
+    #     encoded_data = base64.b64encode(packet).decode("utf-8")
+    #     return {"time":time.perf_counter()-now, "audio":encoded_data}
+    # audio_save = map_step(audio_save, audio_json)
+    # audio_done = text_file_sink(audio_save, f"target/browser/{browser_call_id}.ndjson")
     # stream = log_step(stream, "Audio", lambda x: len(x))
     stream = google_speech_step(
         stream,
@@ -364,11 +375,12 @@ async def browser_transcribe():
         recognizer=app.config["GCP_BROWSER_SPEECH_RECOGNIZER"],
         model="latest_long",
         language_codes=["en-US", "es-US"],
+        audio_format=AudioFormat.WEBM_OPUS,
     )
     stream = log_step(stream, "Speech")
     stream = map_step(stream, lambda x: TextInput(text=x))
-    done = await queue_sink(stream, current_app.current_calls[browser_call_id].outbound)
-    run_call(browser_call_id, done)
+    done = queue_sink(stream, current_app.current_calls[browser_call_id].outbound)
+    await run_call(browser_call_id, done)
     logger.info("Transcription started")
 
 

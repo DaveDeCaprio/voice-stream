@@ -4,6 +4,8 @@ from os.path import join, dirname
 
 import asyncio
 
+from voice_stream.types import background_task
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,4 +45,4 @@ async def debug_event_loop(max_iters: int = 10):
             # output = '\n'.join([str(task) for task in asyncio.all_tasks()])
             logger.info(f"Event loop:\n{response}\n\n")
 
-    asyncio.create_task(gen())
+    background_task(gen())

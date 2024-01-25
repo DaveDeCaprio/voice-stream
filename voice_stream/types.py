@@ -2,7 +2,8 @@ import asyncio
 import importlib
 import inspect
 import logging
-from asyncio import Future
+import traceback
+from asyncio import Future, CancelledError
 from typing import (
     TypeVar,
     Tuple,
@@ -26,14 +27,19 @@ SourceConvertable = Optional[Union[Callable[[], T], T]]
 OptionalMultipleOutputs = Union[AsyncIterator[T], Tuple]
 
 
-class _EndOfStreamType:
-    """This is a marker object used to indicate the end of a stream during iteration."""
+class _MarkerObjectType:
+    """This is a marker object used to indicate a special case during stream iteration."""
 
     pass
 
 
-EndOfStreamMarker = _EndOfStreamType()
+EndOfStreamMarker = _MarkerObjectType()
 """Special marker object that indicates the end of a stream.
+"""
+
+
+QueueExceptionMarker = _MarkerObjectType()
+"""Special marker object that indicates an exception.
 """
 
 
@@ -136,3 +142,70 @@ def load_attribute(full_path):
         print(f"Module {module_path} not found.")
     except AttributeError:
         print(f"Attribute {attribute_name} not found in module {module_path}.")
+
+
+async def cancel_with_confirmation(task: asyncio.Task) -> None:
+    """Cancels a task and waits for confirmation that it has stopped."""
+    task.cancel()
+    try:
+        a = await task
+        # logger.debug(f"Return {a}")
+    except asyncio.CancelledError:
+        # logger.debug("C")
+        pass
+    except StopAsyncIteration:
+        # logger.debug("S")
+        pass
+    # logger.debug(f"Cancelled task {format_task(task)}")
+
+
+def format_task(task: asyncio.Task):
+    if task.cancelled():
+        if task.done():
+            state = "canceled"
+        else:
+            state = "cancelling"
+    elif task.done():
+        result = "exception" if task.exception() else "normal"
+        state = f"finished ({result})"
+    else:
+        state = "pending"  # The task is still pending or running
+    return task.get_name() + " " + state
+
+
+def format_current_task():
+    return format_task(asyncio.current_task())
+
+
+def format_stack_trace(task: asyncio.Task):
+    try:
+        stack = task.get_stack()
+
+        # Format the stack trace into a string
+        if stack:
+            last_frame = stack[-1]
+            formatted_stack_trace = "".join(traceback.format_stack(last_frame))
+        else:
+            formatted_stack_trace = "No stack trace available"
+        return formatted_stack_trace
+    except Exception as e:
+        logger.exception("Error printing stack")
+
+
+def background_task(a: Awaitable):
+    """Creates a background task that will log any exceptions that occur."""
+    task = asyncio.create_task(a)
+    task.add_done_callback(background_callback)
+    return task
+
+
+def background_callback(task: asyncio.Task):
+    # logger.debug(f"Finished background task {task}")
+    try:
+        ex = task.exception()
+        if ex:
+            logger.error(
+                f"Exception thrown from background {format_task(task)} task: {ex}"
+            )
+    except CancelledError:
+        pass

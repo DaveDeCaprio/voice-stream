@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from asyncio import CancelledError
 from typing import (
     AsyncIterator,
     Callable,
@@ -10,6 +11,7 @@ from typing import (
     Any,
 )
 
+from voice_stream import QueueWithException
 from voice_stream._substream_iters import SwitchableIterator, ResettableIterator
 from voice_stream.core import (
     single_source,
@@ -19,6 +21,7 @@ from voice_stream.core import (
     recover_exception_step,
     log_step,
     empty_source,
+    queue_sink,
 )
 from voice_stream.types import (
     T,
@@ -29,6 +32,9 @@ from voice_stream.types import (
     SourceConvertable,
     EndOfStreamMarker,
     OptionalMultipleOutputs,
+    format_current_task,
+    cancel_with_confirmation,
+    background_task,
 )
 
 logger = logging.getLogger(__name__)
@@ -174,14 +180,15 @@ def cancelable_substream_step(
         async for _ in cancel_iter:
             try:
                 if completed_outputs < len(output_iters):
+                    # logger.debug("Cancelling active substream.")
                     for i in output_iters:
-                        i.disconnect()
+                        await i.disconnect()
                     cancel_iters = _create_cancel_messages(
                         output_iters, cancel_messages
                     )
                     completed_outputs = 0
                     logger.debug("Substream canceled - sending cancel messages.")
-                    _switch_outputs(output_iters, cancel_iters)
+                    await _switch_outputs(output_iters, cancel_iters)
                 else:
                     logger.debug(
                         "Ignoring cancel because there is no active substream."
@@ -190,10 +197,10 @@ def cancelable_substream_step(
                 logger.error(f"Error in cancelable_substream: {e}", exc_info=True)
 
     def on_output_complete():
-        # logger.debug("on_output_complete")
         nonlocal completed_outputs
         completed_outputs += 1
         if completed_outputs == len(output_iters):
+            # logger.debug("Marking substream completed")
             substream_completed.set()
 
     next_source = queue_source()
@@ -209,26 +216,29 @@ def cancelable_substream_step(
         cancel_messages if cancel_messages else [None for _ in output_iters]
     )
 
-    monitor_cancel_task = asyncio.create_task(monitor_cancel())
+    monitor_cancel_task = background_task(monitor_cancel())
 
     async def gen():
         nonlocal next_source, next_substream, completed_outputs
         async for item in async_iter:
+            # logger.debug("Starting substream")
             completed_outputs = 0
             substream_completed.clear()
-            _switch_outputs(output_iters, next_substream)
+            await _switch_outputs(output_iters, next_substream)
             await next_source.put(item)
             await next_source.put(EndOfStreamMarker)
             await substream_completed.wait()
+            # logger.debug("Completed substream")
             next_source = queue_source()
             next_substream = to_tuple(substream_func(next_source))
+        # logger.debug("Exhausted input iterator")
         monitor_cancel_task.cancel()
         await next_source.put(EndOfStreamMarker)
         await asyncio.wait([asyncio.create_task(empty_sink(i)) for i in next_substream])
         for i in output_iters:
-            i.end_iteration()
+            await i.end_iteration()
 
-    asyncio.create_task(gen())
+    background_task(gen())
     return from_tuple(output_iters)
 
 
@@ -296,111 +306,108 @@ def interruptable_substream_step(
                         for output, cancel_iter in zip(next_substream, cancel_iters)
                     ]
                 completed_outputs = 0
-                _switch_outputs(output_iters, next_substream)
+                await _switch_outputs(output_iters, next_substream)
             # logger.debug("Running substream")
             active_source = next_source
             await active_source.put(item)
             await active_source.put(EndOfStreamMarker)
             next_source = queue_source()
             next_substream = to_tuple(substream_func(next_source))
-        logger.debug("Completed interruptable substream iter")
+        # logger.debug("Completed interruptable substream iter")
         for i in output_iters:
-            i.end_iteration()
+            await i.end_iteration()
 
-    logger.debug("Creating task")
-    asyncio.create_task(gen())
+    # logger.debug("Creating task")
+    background_task(gen())
     return from_tuple(output_iters)
 
 
 def exception_handling_substream(
-    async_iterator: AsyncIterator[T],
+    async_iter: AsyncIterator[T],
     substream_func: Callable[
         [AsyncIterator[T]],
         Callable[[AsyncIterator[T]], Union[AsyncIterator[Output], Tuple]],
     ],
-    exception_handlers: List[Callable[[BaseException], List[Any]]],
+    exception_handler: Callable[[Exception], List[Any]],
+    num_outputs: int = 1,
     max_exceptions: Optional[int] = None,
 ):
-    exception_count = 0
-    end_of_iter = False
+    input_queue = QueueWithException(maxsize=1)
+    end_of_input = False
 
-    lock = asyncio.Lock()
-
-    async def mark_end_of_iter(aiter):
+    async def mark_end_of_iteration(async_iter: AsyncIterator):
         try:
-            logger.debug(f"Waiting for lock")
-            async with lock:
-                logger.debug(f"Got lock")
-                async for item in aiter:
-                    yield item
-            logger.debug(f"Released lock cleanly")
-        except BaseException as e:
-            logger.debug(f"Released lock through exception")
-            raise e
+            async for item in async_iter:
+                yield item
         finally:
-            logger.debug(f"Released lock/Iteration ended")
-            nonlocal end_of_iter
-            end_of_iter = True
+            nonlocal end_of_input
+            end_of_input = True
 
-    async_iterator = ResettableIterator(mark_end_of_iter(async_iterator))
+    input_stream = mark_end_of_iteration(async_iter)
+    input_task = background_task(
+        input_queue.enqueue_iterator(input_stream, include_end_of_stream=True)
+    )
+    queues = [QueueWithException(maxsize=1) for _ in range(num_outputs)]
+    outputs = [queue_source(q) for q in queues]
 
-    def new_substreams():
-        if end_of_iter:
-            logger.debug("End of iteration was reached.  New substreams are empty")
-            return [empty_source() for _ in range(len(output_iters))]
-        else:
-            substreams = to_tuple(substream_func(async_iterator))
-            return [
-                recover_exception_step(
-                    stream, Exception, lambda x: exception_received(x, ix)
-                )
-                for ix, stream in enumerate(substreams)
-            ]
+    async def gen():
+        try:
+            exception_count = 0
+            last_exception = None
+            while (not max_exceptions) or exception_count <= max_exceptions:
+                if end_of_input and input_queue.qsize() == 0:
+                    for queue in queues:
+                        await queue.put(EndOfStreamMarker)
+                    return
+                else:
+                    substream = queue_source(input_queue)
+                    substream_outputs = to_tuple(substream_func(substream))
+                    if len(outputs) != len(substream_outputs):
+                        raise ValueError(
+                            f"num_outputs was {num_outputs}, but substream_func returned {len(substream_outputs)} outputs."
+                        )
+                    tasks = [
+                        background_task(
+                            q.enqueue_iterator(
+                                s,
+                                include_end_of_stream=False,
+                                propagate_exception=False,
+                            )
+                        )
+                        for q, s in zip(queues, substream_outputs)
+                    ]
+                    try:
+                        await asyncio.gather(*tasks)
+                    except Exception as e:
+                        last_exception = e
+                        logger.exception("Exception in substream")
+                        exception_count += 1
+                        cancel_iters = _create_cancel_messages(
+                            queues, exception_handler(e)
+                        )
+                        # logger.debug("Enqueuing exception tasks")
+                        exception_tasks = [
+                            background_task(
+                                q.enqueue_iterator(
+                                    s,
+                                    include_end_of_stream=False,
+                                    propagate_exception=True,
+                                )
+                            )
+                            for q, s in zip(queues, cancel_iters)
+                        ]
+                        await asyncio.gather(*exception_tasks)
+                        await asyncio.sleep(1.0)
+                        # logger.debug("Restarting substream after exception.")
+            for q in queues:
+                await q.set_exception(last_exception)
+            # logger.debug(f"Exceeded the limit of {max_exceptions} exception recoveries.  Got {exception_count}. Terminating")
+        finally:
+            # logger.info("Exiting gen()")
+            await cancel_with_confirmation(input_task)
 
-    async def exception_received(e, ix):
-        logger.exception(f"Exception in stream #{ix} received {e}")
-        nonlocal exception_count
-        exception_count += 1
-        if max_exceptions and exception_count > max_exceptions:
-            logger.info(
-                f"Exceeded the maximum of {max_exceptions} exception retries.  Throwing exception"
-            )
-            raise e
-        # When an exception is received, recreate the stream and reset the outputs.
-        async_iterator.reset()
-        logger.debug("Reset made")
-        await async_iterator.confirm_reset()
-        logger.debug("Reset confirmed")
-        nonlocal substreams
-        exeception_result = exception_handlers[ix](e)
-        assert len(exeception_result) == len(
-            substreams
-        ), "The exception handler must return a list of outputs, one for each output stream."
-        substreams = [
-            concat_step(to_source(result), stream)
-            for result, stream in zip(exeception_result, new_substreams())
-        ]
-        logger.debug("Switching outputs after cancel")
-        _switch_outputs(output_iters, substreams)
-        logger.debug(f"{len(output_iters)} Outputs switched")
-        for i in output_iters:
-            try:
-                await i.wait_for_state_change()
-            except BaseException as e:
-                logger.exception(f"Error waiting for state change {e}")
-                raise e
-            finally:
-                logger.debug("Done waiting for state change, but maybe an exception?")
-        logger.debug("Switch completed")
-        return None
-
-    substreams = new_substreams()
-    output_iters = [
-        SwitchableIterator(s, propagate_end_of_iter=True) for s in substreams
-    ]
-
-    ret = from_tuple(output_iters)
-    return ret
+    background_task(gen())
+    return from_tuple(outputs)
 
 
 def _create_cancel_messages(
@@ -419,7 +426,7 @@ def _create_cancel_messages(
     return [to_source(_) for _ in cancel_messages]
 
 
-def _switch_outputs(
+async def _switch_outputs(
     switchable_iters: List[SwitchableIterator], new_outputs: List[AsyncIterator]
 ):
     """
@@ -427,4 +434,4 @@ def _switch_outputs(
     """
     assert len(new_outputs) == len(switchable_iters)
     for switchable_iter, new_output in zip(switchable_iters, new_outputs):
-        switchable_iter.switch(new_output)
+        await switchable_iter.switch(new_output)

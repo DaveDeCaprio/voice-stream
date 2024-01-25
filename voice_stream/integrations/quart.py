@@ -64,7 +64,7 @@ async def quart_websocket_source() -> AsyncIterator[Union[bytes, str]]:
             message = await websocket.receive()
         except CancelledError:
             logger.debug("websocket.receive is cancelled.")
-            return
+            raise
         yield message
 
 

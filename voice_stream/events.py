@@ -45,8 +45,21 @@ class SpeechPartialResult(BaseEvent):
     """Partial text returned."""
     time_since_start: float
     """The time when the speech ends (in seconds) relative to the start of the audio."""
-    event_name: str = "speech_end"
+    event_name: str = "speech_partial_result"
     """Always 'speech_partial_result'"""
+
+
+class SpeechToTextResult(BaseEvent):
+    """
+    Provides partial results from a speech recognizer.
+    """
+
+    text: str
+    """Recognized text"""
+    time_since_start: float
+    """The time when the speech ends (in seconds) relative to the start of the audio."""
+    event_name: str = "speech_to_text_result"
+    """Always 'speech_to_text_result'"""
 
 
 class TimedText(BaseEvent):

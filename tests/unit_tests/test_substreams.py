@@ -59,11 +59,16 @@ async def test_switchable_iterator():
         await asyncio.sleep(0.2)
         yield "b"
 
-    iterator = SwitchableIterator(generator())
-    sink = asyncio.create_task(array_sink(iterator))
+    s1 = log_step(generator(), "In")
+    iterator = SwitchableIterator(s1)
+    logger.debug(f"Creating task")
+    sink = asyncio.create_task(array_sink(log_step(iterator, "Out")))
+    logger.debug(f"Started task")
     await asyncio.sleep(0.3)
-    iterator.disconnect()
-    iterator.switch(generator2())
+    logger.debug(f"Disconnecting")
+    await iterator.disconnect()
+    logger.debug(f"Disconnected")
+    await iterator.switch(generator2())
     out = await sink
     assert out == [1, 2, "a", "b"]
 
@@ -221,6 +226,7 @@ async def test_exception_handling_substream_no_error():
         return map_step(stream, lambda x: x + 1)
 
     stream = exception_handling_substream(stream, new_sub, [lambda x: x])
+    stream = log_step(stream, "Out")
     out = await array_sink(stream)
     assert out == [2, 3, 4]
 
@@ -242,8 +248,9 @@ async def test_exception_handling_substream():
     stream = gen()
     stream = log_step(stream, "test")
     stream = exception_handling_substream(
-        stream, sub_with_ex, [lambda x: [f"Error {x.args[0]}"]]
+        stream, sub_with_ex, lambda x: [f"Error {x.args[0]}"]
     )
+    stream = log_step(stream, "output")
     out = await array_sink(stream)
     assert out == [1, 2, "Error 3 is not allowed", 4]
 
@@ -264,7 +271,7 @@ async def test_exception_handling_substream_max_exceptions():
 
     stream = gen()
     stream = exception_handling_substream(
-        stream, sub_with_ex, [lambda x: [f"Error {x.args[0]}"]], max_exceptions=1
+        stream, sub_with_ex, lambda x: [f"Error {x.args[0]}"], max_exceptions=1
     )
     with pytest.raises(ValueError) as e:
         await array_sink(stream)

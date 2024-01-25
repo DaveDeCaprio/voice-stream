@@ -1,11 +1,10 @@
 import logging
 import os
 
-import asyncio
 import pytest
 from google.api_core.client_options import ClientOptions
 from google.cloud.speech_v1 import SpeechAsyncClient as SpeechAsyncClientV1
-from google.cloud.speech_v2 import SpeechAsyncClient, StreamingRecognizeRequest
+from google.cloud.speech_v2 import SpeechAsyncClient
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
 
 from tests.helpers import assert_files_equal, example_file
@@ -16,9 +15,6 @@ from voice_stream import (
     binary_file_sink,
     log_step,
     map_step,
-    concat_step,
-    async_init_step,
-    audio_rate_limit_step,
 )
 from voice_stream.audio import (
     wav_mulaw_file_source,
@@ -27,15 +23,13 @@ from voice_stream.audio import (
     ogg_page_separator_step,
     ogg_concatenator_step,
 )
-from voice_stream.core import delay_step, filter_step
+from voice_stream.core import delay_step
 from voice_stream.events import SpeechStart, SpeechEnd, SpeechPartialResult
 from voice_stream.integrations.google import (
     google_speech_step,
     google_text_to_speech_step,
     google_speech_v1_step,
-    _initial_recognition_config,
 )
-from voice_stream.substreams import exception_handling_substream
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +54,7 @@ async def test_google_speech():
         language_codes=["en-US", "es-US"],
         audio_format=AudioFormat.WAV_MULAW_8KHZ,
     )
+    stream = log_step(stream, "Out")
     out = await array_sink(stream)
     assert out == ["Testing 1 2 3 testing 1 2 3."]
 
@@ -80,6 +75,7 @@ async def test_google_speech_browser():
         project=project,
         location=location,
         recognizer=recognizer,
+        audio_format=AudioFormat.WEBM_OPUS,
     )
     out = await array_sink(stream)
     assert out == ["start browser bass call"]
@@ -109,13 +105,16 @@ async def test_google_speech_with_events():
     events = await array_sink(events)
     logger.info(events)
     assert out == ["Testing 1 2 3 testing 1 2 3."]
-    assert events[:3] == [
+    assert [_ for _ in events if _.event_name != "speech_partial_result"] == [
         SpeechStart(time_since_start=1.29),
         SpeechEnd(time_since_start=4.5),
-        SpeechPartialResult(
-            event_name="speech_end", text="test", time_since_start=1.83
-        ),
     ]
+    assert (
+        SpeechPartialResult(
+            event_name="speech_partial_result", text="test", time_since_start=1.83
+        )
+        in events
+    )
 
 
 @pytest.mark.asyncio
@@ -131,6 +130,41 @@ async def test_google_speech_browser_v1():
     )
     out = await array_sink(stream)
     assert out == ["Start browser-based call."]
+
+
+@pytest.mark.asyncio
+async def test_google_speech_browser_v1_restart_too_quick():
+    speech_async_client = SpeechAsyncClientV1(
+        client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
+    )
+    stream = binary_file_source(example_file("splittable.webm"), chunk_size=1024)
+    stream = google_speech_v1_step(
+        stream,
+        speech_async_client,
+        audio_format=AudioFormat.WEBM_OPUS,
+        stream_reset_timeout_secs=1,
+    )
+    out = await array_sink(stream)
+    assert out == ["Hello, we recording is that working now and see?"]
+
+
+# @pytest.mark.asyncio
+# async def test_google_speech_browser_v1_restart_longer():
+#     speech_async_client = SpeechAsyncClientV1(
+#         client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
+#     )
+#     stream = binary_file_source(example_file("longer.webm"), chunk_size=1024)
+#     # 415k in 25 seconds to get this to roughly realtime
+#     stream = delay_step(stream, 25/415)
+#     stream = google_speech_v1_step(
+#         stream,
+#         speech_async_client,
+#         audio_format=AudioFormat.WEBM_OPUS,
+#         stream_reset_timeout_secs=10,
+#     )
+#     stream = log_step(stream, "Out")
+#     out = await array_sink(stream)
+#     assert out == ['Are you there?', ' Does it work?', 'words', " Oh, yeah, what's 2 + 2?"]
 
 
 @pytest.mark.asyncio
@@ -222,81 +256,3 @@ async def test_google_text_to_speech_mp3(tmp_path):
     target = tmp_path.joinpath("tts.mp3")
     await binary_file_sink(stream, target)
     assert_files_equal(example_file("tts.mp3"), target, mode="b")
-
-
-@pytest.mark.asyncio
-async def test_google_speech_exception():
-    """This annoyingly long and complicated test checks that we can really recover from errors in google speech steps.
-    Attempts to replicate all failure modes with a simpler test failed."""
-    logger.debug("Start")
-    speech_async_client = SpeechAsyncClient(
-        client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
-    )
-    project = os.environ["GCP_PROJECT_ID"]
-    location = os.environ["GCP_SPEECH_LOCATION"]
-    recognizer = os.environ["GCP_TELEPHONE_SPEECH_RECOGNIZER"]
-    stream = binary_file_source(example_file("testing.webm"), chunk_size=1000)
-    stream = delay_step(stream, 0.05)
-
-    def map_audio(x):
-        return StreamingRecognizeRequest(recognizer=recognizer, audio=x)
-
-    stream = log_step(stream, "Audio", lambda x: len(x))
-    stream = map_step(stream, map_audio)
-    initial_config = _initial_recognition_config(
-        False,
-        project,
-        location,
-        recognizer,
-    )
-
-    async def recognize_step(stream):
-        return await speech_async_client.streaming_recognize(stream, timeout=0.8)
-
-    def recognize_substream(stream):
-        logger.info("Initializing new recognize step")
-        config = array_source([initial_config])
-        config = log_step(config, "Config", lambda x: "")
-        stream = concat_step(config, stream)
-        return async_init_step(stream, recognize_step)
-
-    def handle_exception(e):
-        logger.error(f"Google Recognize aborted. {e}", exc_info=e)
-        return [None]
-
-    stream = exception_handling_substream(
-        stream, recognize_substream, [handle_exception], max_exceptions=10
-    )
-    out = await array_sink(stream)
-    assert out == []
-
-
-@pytest.mark.asyncio
-async def test_google_speech_long():
-    speech_async_client = SpeechAsyncClient(
-        client_options=ClientOptions(api_endpoint="us-speech.googleapis.com")
-    )
-    project = os.environ["GCP_PROJECT_ID"]
-    location = os.environ["GCP_SPEECH_LOCATION"]
-    recognizer = os.environ["GCP_BROWSER_SPEECH_RECOGNIZER"]
-    logger.info(f"Recognizer is {recognizer}")
-    stream = binary_file_source(example_file("12min.mp3"), chunk_size=1024)
-    # stream = audio_rate_limit_step(stream, audio_format=AudioFormat.MP3, buffer_seconds=0.5)
-    # 1 Mb for 60 seconds of audio
-    stream = delay_step(stream, 60 / 1000)
-    stream, events = google_speech_step(
-        stream,
-        speech_async_client,
-        project=project,
-        location=location,
-        recognizer=recognizer,
-        include_events=True,
-        max_minutes=20,
-    )
-    stream = log_step(stream, "output")
-    out = array_sink(stream)
-    events = filter_step(events, lambda x: x.event_name == "speech_start")
-    events = log_step(events, "Speech event")
-    events = array_sink(events)
-    out, events = await asyncio.gather(out, events)
-    assert out == ["start browser bass call"]

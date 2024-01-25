@@ -230,6 +230,29 @@ async def test_queue_source_put():
 
 
 @pytest.mark.asyncio
+async def test_queue_source_cancel():
+    q = asyncio.Queue()
+    e = asyncio.Event()
+    source = queue_source(q, e)
+    stream = array_sink(source)
+    await q.put(1)
+    await q.put(2)
+    e.set()
+    out = await stream
+    assert out == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_queue_sink_no_end():
+    stream = array_source([1, 2, 3])
+    queue = await queue_sink(stream, send_end_of_stream=False)
+    assert await queue.get() == 1
+    assert await queue.get() == 2
+    assert await queue.get() == 3
+    assert queue.empty() == True
+
+
+@pytest.mark.asyncio
 async def test_merge_step():
     stream1 = array_source([1, 2])
     stream2 = array_source([3, 4])
@@ -330,3 +353,19 @@ async def test_buffer_step():
     stream = log_step(stream, "Test")
     out = await rate_limit_sink(stream)
     assert out == ["a", "bcd"]
+
+
+@pytest.mark.asyncio
+async def test_buffer_step_no_join():
+    async def rate_limit_sink(ai):
+        out = []
+        async for item in ai:
+            await asyncio.sleep(0.1)
+            out.append(item)
+        return out
+
+    stream = array_source(["a", "b", "c", "d"])
+    stream = buffer_step(stream)
+    stream = log_step(stream, "Test")
+    out = await rate_limit_sink(stream)
+    assert out == ["a", "b", "c", "d"]
