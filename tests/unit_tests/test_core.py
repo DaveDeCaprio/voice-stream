@@ -234,11 +234,12 @@ async def test_queue_source_cancel():
     q = asyncio.Queue()
     e = asyncio.Event()
     source = queue_source(q, e)
-    stream = array_sink(source)
+    task = asyncio.create_task(array_sink(source))
     await q.put(1)
     await q.put(2)
+    await asyncio.sleep(0.01)
     e.set()
-    out = await stream
+    out = await task
     assert out == [1, 2]
 
 
