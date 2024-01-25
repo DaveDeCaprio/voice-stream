@@ -18,7 +18,6 @@ from voice_stream.audio import wav_mulaw_file_sink, AudioFormat
 from voice_stream.core import single_source, array_sink
 from voice_stream.integrations.google import google_text_to_speech_step
 from voice_stream.integrations.langchain import (
-    langchain_load_memory_step,
     langchain_step,
 )
 
