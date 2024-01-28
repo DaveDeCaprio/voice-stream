@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import dataclasses
 import datetime
 import logging
 import os
-import time
 import urllib
 import uuid
-from asyncio import CancelledError
 from typing import Coroutine, AsyncIterator
 
 from dotenv import load_dotenv
 from google.api_core.client_options import ClientOptions
 from google.cloud.speech_v2 import SpeechAsyncClient
-from google.cloud.speech_v1 import SpeechAsyncClient as SpeechAsyncClientV1
 from google.cloud.texttospeech_v1 import TextToSpeechAsyncClient
 from pydantic import BaseModel
 from quart import (
@@ -41,8 +37,6 @@ from voice_stream import (
     log_step,
     fork_step,
     binary_file_sink,
-    binary_file_source,
-    audio_rate_limit_step,
     filter_spurious_speech_start_events_step,
     tts_with_buffer_and_rate_limit_step,
     cancelable_substream_step,
@@ -52,7 +46,6 @@ from voice_stream.events import AnsweringMachineDetection, CallStarted
 from voice_stream.integrations.google import (
     google_speech_step,
     google_text_to_speech_step,
-    google_speech_v1_step,
 )
 from voice_stream.integrations.langchain import langchain_step
 from voice_stream.integrations.quart import quart_websocket_sink, quart_websocket_source

@@ -3,33 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPT-4/Gemini Showdown</title>
+    <title>LLM Test App</title>
     <style>
-        .top-section {
-            display: flex;
-            align-items: center; /* Aligns items vertically in the center */
-            justify-content: space-between; /* Spreads out the items */
-        }
         .container {
             text-align: center;
             margin-top: 5px;
         }
         .message-input {
             margin-bottom: 20px;
-            width: 300px; /* Width of the text area */
-            height: 100px; /* Height of the text area */
+            width: 400px; /* Width of the text area */
+            height: 150px; /* Height of the text area */
         }
-
-        .splash-image {
-            /* Add styling as needed, e.g., size of the images */
-            width: 300px;
-            height: auto;
-        }
-
-        .button {
-            margin: 10px;
-        }
-
         #messages {
             list-style-type: none; /* Remove bullets */
             padding-left: 0; /* Remove padding */
@@ -44,30 +28,26 @@
     </style>
 </head>
 <body>
-<div>
-    <div class="top-section">
-        <img src="/static/splash.png" alt="Left Splash Image" class="splash-image">
-        <div class="container">
-            <h1>GPT-4 vs. Gemini Showdown</h1>
-            <div>
-                <input type="radio" id="text" name="mode" value="text" onclick="toggleMode('text')">
-                <label for="text">Text</label>
-                <input type="radio" id="voice" name="mode" value="voice" checked onclick="toggleMode('voice')">
-                <label for="voice">Voice</label>
-            </div>
-
-            <div id="text-inputs" style="display: none;">
-                <textarea class="message-input" id="messageText" autocomplete="off"></textarea>
-                <button onclick="sendChatMessage()">Submit</button>
-            </div>
-
-            <div id="voice-inputs">
-                <button id="audio-button-start" onclick="startAudio()">Start Audio</button>
-                <button id="audio-button-stop" onclick="stopAudio()" hidden="true">Stop Audio</button>
-            </div>
+<div class="container">
+    <div class="container">
+        <div>
+            <input type="radio" id="text" name="mode" value="text" checked onclick="toggleMode('text')">
+            <label for="text">Text</label>
+            <input type="radio" id="voice" name="mode" value="voice" onclick="toggleMode('voice')">
+            <label for="voice">Voice</label>
         </div>
-        <img src="/static/splash.png" alt="Right Splash Image" class="splash-image">
+
+        <div id="text-inputs">
+            <textarea class="message-input" id="messageText" autocomplete="off"></textarea>
+            <button onclick="sendChatMessage()">Submit</button>
+        </div>
+
+        <div id="voice-inputs" style="display: none;">
+            <button id="audio-button-start" onclick="startAudio()">Start Audio</button>
+            <button id="audio-button-stop" onclick="stopAudio()" hidden="true">Stop Audio</button>
+        </div>
     </div>
+
     <div>
         <audio id="audio-player"></audio>
     </div>
@@ -179,8 +159,7 @@
 
     async function sendChatMessage() {
         if (messagesWebsocket == null) {
-            const uuid = generateUUID();
-            await initializeMessagesWebsocket(uuid);
+            await initializeMessagesWebsocket();
         }
         var input = document.getElementById("messageText")
         console.log("Sending message: ", input.value)
@@ -189,9 +168,10 @@
     }
 
     let isWebsocketReady = false;
-    async function initializeMessagesWebsocket(id) {
+    async function initializeMessagesWebsocket(id = "chat") {
         const wsUrl = `${protocol}//${host}/chat/${id}`;
         messagesWebsocket = new WebSocket(wsUrl);
+        lastWasQuery = false;
         messagesWebsocket.onmessage = function(event) {
             var messages = document.getElementById('messages')
             const data = JSON.parse(event.data)
@@ -202,11 +182,14 @@
                 var message = document.createElement('li')
                 message.innerHTML = `<b>Moderator:</b> ${data.query}`
                 messages.appendChild(message)
-            } else if (data.model) {
-                const message = document.createElement('li')
-                message.innerHTML = `<b>${data.model}:</b> `
-                messages.appendChild(message)
+                lastWasQuery = true;
             } else if (data.output) {
+                if (lastWasQuery) {
+                    const message = document.createElement('li')
+                    message.innerHTML = `<b>AI:</b> `
+                    messages.appendChild(message)
+                    lastWasQuery = false;
+                }
                 messages.lastChild.innerHTML += escapeHTML(data.output)
             }
         };
@@ -236,7 +219,7 @@
     }
     function generateUUID() {
         return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
-                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
         );
     }
 </script>
