@@ -146,7 +146,7 @@ async def test_google_speech_browser_v1_restart_too_quick():
     )
     out = await array_sink(stream)
     # We are checking for any valid result here really.
-    assert out == (["Hello, we recording is that working now and see?"] or [])
+    assert out == ["Hello, we recording is that working now and see?"] or out == []
 
 
 # @pytest.mark.asyncio
