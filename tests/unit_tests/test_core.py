@@ -82,6 +82,14 @@ async def test_map_step_none():
 
 
 @pytest.mark.asyncio
+async def test_map_step_none_with_empty_string():
+    stream = array_source([1, 2, "", 4])
+    stream = map_step(stream, lambda x: x, ignore_none=True)
+    out = await array_sink(stream)
+    assert out == [1, 2, "", 4]
+
+
+@pytest.mark.asyncio
 async def test_map_step_ignore():
     stream = array_source(range(4))
     stream = map_step(

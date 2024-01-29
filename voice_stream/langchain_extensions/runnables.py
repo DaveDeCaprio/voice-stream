@@ -24,7 +24,7 @@ class RunnableSwitch(RunnableBranch):
     ) -> None:
         def check(y):
             def f(x):
-                logger.info(f"Checking {x} == {y}")
+                # logger.debug(f"Checking {x[input_key]} == {y}")
                 return x[input_key] == y
 
             return f

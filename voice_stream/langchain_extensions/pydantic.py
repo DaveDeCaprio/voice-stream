@@ -1,15 +1,15 @@
 import json
+import logging
 import re
+from json import JSONDecodeError
 from operator import itemgetter
 from typing import Type
 
-from langchain_community.chat_models import ChatVertexAI
 from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import SystemMessage
 from langchain_core.output_parsers import BaseOutputParser, StrOutputParser
 from langchain_core.prompts import (
     ChatPromptTemplate,
-    MessagesPlaceholder,
     HumanMessagePromptTemplate,
 )
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda, RunnableBranch
@@ -17,7 +17,10 @@ from langchain_openai import ChatOpenAI
 from pydantic import ValidationError
 
 from voice_stream.langchain_extensions.memory import LastKMessagesPlaceholder
+from voice_stream.langchain_extensions.runnables import RunnableLogger
 from voice_stream.types import T
+
+logger = logging.getLogger(__name__)
 
 
 def reduce_schema(schema: dict) -> dict:
@@ -29,14 +32,6 @@ def reduce_schema(schema: dict) -> dict:
         if "title" in schema["properties"][prop]:
             del schema["properties"][prop]["title"]
     return schema
-
-
-def pydantic_chain(cls):
-    return (
-        ChatPromptTemplate.from_messages([("human", "{query}")])
-        | ChatOpenAI(model="gpt-4")
-        | StrOutputParser()
-    )
 
 
 class PydanticV2OutputParser(BaseOutputParser):
@@ -51,7 +46,16 @@ class PydanticV2OutputParser(BaseOutputParser):
             r"\{.*\}", text.strip(), re.MULTILINE | re.IGNORECASE | re.DOTALL
         )
         json_str = match.group() if match else ""
-        json_object = json.loads(json_str, strict=False)
+        try:
+            json_object = json.loads(json_str, strict=False)
+        except JSONDecodeError:
+            # See if we can fix by replacing single quotes with double quotes.
+            try:
+                json_object = json.loads(json_str.replace("'", '"'), strict=False)
+            except JSONDecodeError as e:
+                raise ValueError(
+                    f"Could not parse JSON: {json_str}, extracted from {text}", e
+                )
         try:
             return self.pydantic_model.parse_obj(json_object)
         except ValidationError as e:
@@ -96,9 +100,9 @@ class PydanticV2OutputParser(BaseOutputParser):
                         output_schema=self._output_schema(),
                     )
                 ),
-                LastKMessagesPlaceholder(variable_name="history", max_messages=1),
+                LastKMessagesPlaceholder(variable_name="history", max_messages=10),
                 HumanMessagePromptTemplate.from_template(
-                    "Existing Parse:\n{parse}\n\nErrors:\n{errors}\n\nUser message:\n{message}"
+                    "Existing Parse:\n{parse}\n\nErrors:\n{errors}\n\nUser message:\n{query}"
                 ),
             ]
         )
@@ -112,9 +116,9 @@ class PydanticV2OutputParser(BaseOutputParser):
                         output_schema=self._output_schema(),
                     )
                 ),
-                LastKMessagesPlaceholder(variable_name="history", max_messages=6),
+                LastKMessagesPlaceholder(variable_name="history", max_messages=20),
                 HumanMessagePromptTemplate.from_template(
-                    "{message}\n\nADDITIONAL INFO:\nParse:\n{parse}\n\nErrors:\n{errors}"
+                    "{query}\n\nADDITIONAL INFO:\nParse:\n{parse}\n\nErrors:\n{errors}"
                 ),
             ]
         )
@@ -135,45 +139,59 @@ class PydanticV2OutputParser(BaseOutputParser):
     def get_chain(self):
         next_question_chain = (
             {
-                "message": itemgetter("message"),
+                "query": itemgetter("query"),
                 "history": itemgetter("history"),
-                "parse": lambda x: x["exception"].observation,
-                "errors": lambda x: x["exception"].args[0],
+                "parse": lambda x: x["parsed_result"]["exception"].observation,
+                "errors": lambda x: x["parsed_result"]["exception"].args[0],
             }
             | self.get_next_question_prompt()
+            # | RunnableLogger("Next question generator")
             | ChatOpenAI(model="gpt-4")
             | StrOutputParser()
         )
         confirmation_chain = (
             self.get_confirmation_prompt()
+            # | RunnableLogger("Confirmation generator")
             | ChatOpenAI(model="gpt-4")
             | StrOutputParser()
         )
+
+        def extract(x, field, default):
+            # logger.info(f"Extracting {field} from {x}")
+            return x.get(field, default)
+
         return (
             {
-                "message": itemgetter("message"),
+                "query": itemgetter("query"),
                 "history": lambda x: x.get("history", []),
-                "parse": lambda x: x.get("parse", "{}"),
-                "errors": lambda x: x.get("errors", ""),
+                "parse": lambda x: extract(x, "parse", "{}"),
+                "errors": lambda x: extract(x, "errors", ""),
             }
             # Take the initial user message and try to parse it.  We either get a full object back, or an exception with the missing info
-            | (
-                self.get_parsing_prompt()
-                | ChatOpenAI(model="gpt-4")
-                | self
-                | RunnableLambda(lambda x: {"parsed_result": x})
-            ).with_fallbacks(
-                [RunnableLambda(lambda x: x)],
-                exceptions_to_handle=(OutputParserException,),
-                exception_key="exception",
+            | RunnablePassthrough.assign(
+                parsed_result=(
+                    self.get_parsing_prompt()
+                    # | RunnableLogger("Parse input")
+                    | ChatOpenAI(model="gpt-4")
+                    | self
+                ).with_fallbacks(
+                    [RunnableLambda(lambda x: x)],
+                    exceptions_to_handle=(OutputParserException,),
+                    exception_key="exception",
+                )
             )
             # If we didn't have a clean parse, then generate the next question.
-            | RunnableBranch(
-                [
-                    lambda x: "exception" in x,
-                    RunnablePassthrough.assign(response=next_question_chain),
-                ],
-                RunnablePassthrough.assign(response=confirmation_chain),
+            | RunnablePassthrough.assign(
+                output=
+                # RunnableLogger("Parse check") |
+                RunnableBranch(
+                    [
+                        lambda x: "parsed_result" in x
+                        and "exception" in x["parsed_result"],
+                        next_question_chain,
+                    ],
+                    confirmation_chain,
+                )
             )
         )
 
@@ -239,7 +257,11 @@ The last user message in the context will have some extra information appended t
 - A "Parse" which contains the current parsed version of the object based on the user's responses.
 - A list of zero or more "Errors", which are problems with the "Parse" object.  This includes incorrect or missing fields. 
 
-Your output should be the next question to ask the user.  Remember, only ask for 1 piece of information.
+Your output should be the next question to ask the user.  You should only ask a one question, and that question should only ask for 
+one piece of information.  If there are multiple errors, just try to fix one of them.  For example, if there are two fields missing, 
+such as name and address, you could ask "What is your name?" or "What is your address?"  You should not ask for both.
+
+
 """
 
 CONFIRMATION_PROMPT = """The previous conversation has taken information from the user and used it to construct a JSON object.

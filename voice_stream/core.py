@@ -1178,7 +1178,7 @@ async def map_step(
             v = func(item)
             if is_async:
                 v = await v
-            if (not ignore_none) or v:
+            if (not ignore_none) or (v is not None):
                 yield v
 
 

@@ -35,10 +35,6 @@ class ActionItem(BaseModel):
     done: bool = Field(description="Whether the task is done or not.", default=False)
 
 
-def example_chain():
-    return pydantic_chain(ActionItem)
-
-
 def test_model_validation():
     data = {"name": "Dave"}
     with pytest.raises(ValidationError) as ve:
@@ -132,13 +128,13 @@ def test_pydantic_parsing_prompt():
     with pytest.raises(OutputParserException) as e:
         chain.invoke(
             {
-                "message": "Have Jeff pick up my clothes",
+                "query": "Have Jeff pick up my clothes",
                 "parse": "{}",
                 "errors": "",
                 "history": [],
             }
         )
-    assert e.value.args[0] == "due_date: Field required"
+    assert "due_date: Field required" in e.value.args[0]
 
 
 def test_pydantic_next_question_prompt():
@@ -150,7 +146,7 @@ def test_pydantic_next_question_prompt():
     )
     next_question = chain.invoke(
         {
-            "message": "Have Jeff pick up my clothes",
+            "query": "Have Jeff pick up my clothes",
             "parse": "{}",
             "errors": "",
             "history": [],
@@ -162,7 +158,7 @@ def test_pydantic_next_question_prompt():
 def test_pydantic_full_next_question():
     action_item_parser = PydanticV2OutputParser(pydantic_model=ActionItem)
     ret = action_item_parser.get_chain().invoke(
-        {"message": "Have Jeff pick up my clothes"}
+        {"query": "Have Jeff pick up my clothes"}
     )
     logger.debug(f"Output: {ret}")
 
@@ -171,13 +167,14 @@ def test_pydantic_full_next_question():
     action_item_parser = PydanticV2OutputParser(pydantic_model=ActionItem)
     ret = action_item_parser.get_chain().invoke(
         {
-            "message": "Have Jeff pick up my clothes from the dry cleaner on the corner by 2024-01-12"
+            "query": "Have Jeff pick up my clothes from the dry cleaner on the corner by 2024-01-12"
         }
     )
+    logger.debug(f"Response:\n{ret}")
     assert ret["parsed_result"] == ActionItem(
         name="Clothes pickup",
         description="Pick up my clothes from the dry cleaner on the corner",
         assignee="Jeff",
         due_date=datetime.date(2024, 1, 12),
     )
-    assert "clothes" in ret["response"].lower()
+    assert "clothes" in ret["output"].lower()

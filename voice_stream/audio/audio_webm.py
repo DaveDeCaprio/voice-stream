@@ -1,8 +1,4 @@
-import collections
-import io
 import logging
-
-import av
 
 logger = logging.getLogger(__name__)
 
