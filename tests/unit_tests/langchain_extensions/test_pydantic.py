@@ -157,14 +157,6 @@ def test_pydantic_next_question_prompt():
 def test_pydantic_full_next_question():
     action_item_parser = PydanticV2OutputParser(pydantic_model=ActionItem)
     ret = action_item_parser.get_chain().invoke(
-        {"query": "Have Jeff pick up my clothes"}
-    )
-    logger.debug(f"Output: {ret}")
-
-
-def test_pydantic_full_next_question():
-    action_item_parser = PydanticV2OutputParser(pydantic_model=ActionItem)
-    ret = action_item_parser.get_chain().invoke(
         {
             "query": "Have Jeff pick up my clothes from the dry cleaner on the corner by 2024-01-12"
         }
