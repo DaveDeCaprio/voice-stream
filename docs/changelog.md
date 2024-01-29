@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.10.0 (Jan 29, 2024)
+
+* Added `PydanticV2OutputParser` parser and chain which runs a conversation where the goal is to fill in a pydantic object.
+* Fixed bug where `ignore_none` in `map_step` was ignoring any falsy value (like '' and 0). Fixed so it only ignores 'None'.
+* Added new example: FastAPI llm test app without telephony 
+
 ## 0.9.0 (Jan 25, 2024)
 
 * Rewrote `google_speech_step` to allow streaming for longer than 5 minutes.

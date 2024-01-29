@@ -12,7 +12,6 @@ from pydantic import BaseModel, ValidationError, Field
 
 from voice_stream.langchain_extensions.pydantic import (
     reduce_schema,
-    pydantic_chain,
     PydanticV2OutputParser,
 )
 
