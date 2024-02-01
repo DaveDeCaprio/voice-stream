@@ -24,7 +24,7 @@ jobs:
         run: poetry version ${{ steps.version.outputs.version }}
       - name: Build Changelog
         id: changelog
-        uses: mikepenz/release-changelog-builder-action@v3
+        uses: mikepenz/release-changelog-builder-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Poetry Build
