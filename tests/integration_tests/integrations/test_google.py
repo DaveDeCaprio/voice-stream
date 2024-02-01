@@ -34,6 +34,12 @@ from voice_stream.integrations.google import (
 logger = logging.getLogger(__name__)
 
 
+def test_secrets():
+    assert len(os.environ["GCP_PROJECT_ID"]) > 0
+    assert len(os.environ["OPENAI_API_KEY"]) > 0
+    assert len(os.environ["GCP_TELEPHONE_SPEECH_RECOGNIZER"]) > 0
+
+
 @pytest.mark.asyncio
 async def test_google_speech():
     speech_async_client = SpeechAsyncClient(
