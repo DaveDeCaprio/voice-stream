@@ -1631,13 +1631,13 @@ extended-testing = ["jinja2 (>=3,<4)"]
 
 [[package]]
 name = "langchain-google-genai"
-version = "0.0.6"
+version = "0.0.9"
 description = "An integration package connecting Google's genai package and LangChain"
 optional = true
 python-versions = ">=3.9,<4.0"
 files = [
-    {file = "langchain_google_genai-0.0.6-py3-none-any.whl", hash = "sha256:2e347ad4d18f8f761ed8d3997f9ea52b41f97b7fd81f698612ad718da5d9c13b"},
-    {file = "langchain_google_genai-0.0.6.tar.gz", hash = "sha256:93156a523306031d4bbfa7c759778a1123779902512f8ef329516da558069d70"},
+    {file = "langchain_google_genai-0.0.9-py3-none-any.whl", hash = "sha256:82c0ca9540132a59b09fc38ff249a2dd06f8a587ed37c291a4fe7678d5566d15"},
+    {file = "langchain_google_genai-0.0.9.tar.gz", hash = "sha256:466a228032bb06b0c1def822e57cbf2dfe9e4d1cc91dffa473a3025eb760f0ef"},
 ]
 
 [package.dependencies]
