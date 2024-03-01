@@ -982,17 +982,18 @@ protobuf = ["protobuf (<5.0.0dev)"]
 
 [[package]]
 name = "google-cloud-texttospeech"
-version = "2.15.1"
+version = "2.16.2"
 description = "Google Cloud Texttospeech API client library"
 optional = true
 python-versions = ">=3.7"
 files = [
-    {file = "google-cloud-texttospeech-2.15.1.tar.gz", hash = "sha256:47845e3ad9cefdabaf358947cb196dddea2faa4cdfcaf864a011db821a4deafb"},
-    {file = "google_cloud_texttospeech-2.15.1-py2.py3-none-any.whl", hash = "sha256:9af25742c2fc57e7793dfc831ab40d5f169f6843ba553ca559ab1ec73536076e"},
+    {file = "google-cloud-texttospeech-2.16.2.tar.gz", hash = "sha256:eaac809d9a7d07c5c9eb58613916542cb2fa52c14f9f31da7ff4989f717f8e0c"},
+    {file = "google_cloud_texttospeech-2.16.2-py2.py3-none-any.whl", hash = "sha256:59de4d6021d39502572e9d6acdf851c2466f9140357dce249641d137bf63f062"},
 ]
 
 [package.dependencies]
-google-api-core = {version = ">=1.34.0,<2.0.dev0 || >=2.11.dev0,<3.0.0dev", extras = ["grpc"]}
+google-api-core = {version = ">=1.34.1,<2.0.dev0 || >=2.11.dev0,<3.0.0dev", extras = ["grpc"]}
+google-auth = ">=2.14.1,<3.0.0dev"
 proto-plus = ">=1.22.3,<2.0.0dev"
 protobuf = ">=3.19.5,<3.20.0 || >3.20.0,<3.20.1 || >3.20.1,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<5.0.0dev"
 
